@@ -57,8 +57,8 @@ export function createSky(): Sky {
         col += vec3(1.0, 0.96, 0.84) * smoothstep(0.999904, 0.999976, sunAmt) * 3.8 * uDay;
 
         float moonAmt = max(dot(dir, uMoon), 0.0);
-        col += vec3(0.62, 0.72, 1.0) * pow(moonAmt, 30.0) * 0.6 * (1.0 - uDay);
-        col += vec3(0.95, 0.98, 1.0) * smoothstep(0.999912, 0.999978, moonAmt) * 4.5 * (1.0 - uDay);
+        col += vec3(0.42, 0.52, 0.86) * pow(moonAmt, 30.0) * 0.22 * (1.0 - uDay);
+        col += vec3(0.90, 0.94, 1.0) * smoothstep(0.999912, 0.999978, moonAmt) * 3.0 * (1.0 - uDay);
 
         float horizon = pow(1.0 - abs(dir.y), 10.0);
         col += vec3(0.95, 0.55, 0.3) * horizon * 0.16 * (1.0 - uDay);
@@ -107,66 +107,35 @@ export function createSky(): Sky {
 
   const moonGroup = new THREE.Group();
   moonGroup.position.copy(MOON_DIR).multiplyScalar(1450);
-  const lunarMap = tex(512, 256, (ctx, w, h) => {
+  const lunarMap = tex(256, 128, (ctx, w, h) => {
     const g = ctx.createRadialGradient(w * 0.38, h * 0.4, 2, w * 0.5, h * 0.5, w * 0.8);
-    g.addColorStop(0, "#ffffff");
-    g.addColorStop(0.45, "#f2f3f5");
-    g.addColorStop(0.75, "#d5d9e2");
-    g.addColorStop(1, "#9aa4b8");
+    g.addColorStop(0, "#f5f4eb");
+    g.addColorStop(0.55, "#d9dce2");
+    g.addColorStop(1, "#8d96a7");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    // Dark maria (lunar seas) for a realistic moon face.
-    const mariaRand = rng(777);
-    for (let i = 0; i < 22; i++) {
-      const x = w * 0.5 + (mariaRand() - 0.5) * w * 0.55;
-      const y = h * 0.5 + (mariaRand() - 0.5) * h * 0.55;
-      const radius = 18 + mariaRand() * 46;
-      const mg = ctx.createRadialGradient(x, y, 1, x, y, radius);
-      mg.addColorStop(0, "rgba(88,96,116,0.34)");
-      mg.addColorStop(0.7, "rgba(104,112,132,0.18)");
-      mg.addColorStop(1, "rgba(104,112,132,0)");
-      ctx.fillStyle = mg;
-      ctx.beginPath();
-      ctx.ellipse(x, y, radius, radius * (0.6 + mariaRand() * 0.5), mariaRand() * 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
     const craterRand = rng(1421);
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 85; i++) {
       const x = craterRand() * w, y = craterRand() * h;
-      const radius = 2 + craterRand() * 18;
-      if (Math.hypot(x - w * 0.5, y - h * 0.5) < radius + 30) continue;
+      const radius = 1.5 + craterRand() * 10;
+      if (Math.hypot(x - w * 0.5, y - h * 0.5) < radius + 16) continue;
       const cg = ctx.createRadialGradient(x - radius * 0.22, y - radius * 0.25, radius * 0.05, x, y, radius);
-      cg.addColorStop(0, "rgba(255,255,252,0.34)");
-      cg.addColorStop(0.72, "rgba(97,105,121,0.2)");
-      cg.addColorStop(1, "rgba(42,48,62,0.42)");
+      cg.addColorStop(0, "rgba(255,255,250,0.22)");
+      cg.addColorStop(0.72, "rgba(97,105,121,0.14)");
+      cg.addColorStop(1, "rgba(42,48,62,0.3)");
       ctx.fillStyle = cg;
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
-      // Bright crater rim highlight.
-      ctx.strokeStyle = "rgba(255,255,255,0.22)";
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(x, y, radius * 0.92, Math.PI * 1.05, Math.PI * 1.85);
-      ctx.stroke();
     }
-    // Bright limb glow around the edge.
-    const limb = ctx.createRadialGradient(w * 0.5, h * 0.5, w * 0.32, w * 0.5, h * 0.5, w * 0.52);
-    limb.addColorStop(0, "rgba(255,255,255,0)");
-    limb.addColorStop(0.85, "rgba(255,255,255,0.12)");
-    limb.addColorStop(1, "rgba(255,255,255,0.34)");
-    ctx.fillStyle = limb;
-    ctx.fillRect(0, 0, w, h);
   }, false);
   const moonDisk = new THREE.Mesh(
-    new THREE.SphereGeometry(14.4, 32, 24),
-    new THREE.MeshBasicMaterial({ map: lunarMap, color: 0xffffff, toneMapped: false })
+    new THREE.SphereGeometry(14.4, 24, 18),
+    new THREE.MeshBasicMaterial({ map: lunarMap, color: 0xe8edff, toneMapped: false })
   );
-  const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xdceaff, transparent: true, opacity: 1.0, depthWrite: false, toneMapped: false }));
+  const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0x9dbaff, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }));
   moonHalo.scale.set(190, 190, 1);
-  const moonOuterHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xaec8ff, transparent: true, opacity: 0.6, depthWrite: false, toneMapped: false }));
-  moonOuterHalo.scale.set(340, 340, 1);
-  moonGroup.add(moonOuterHalo, moonHalo, moonDisk);
+  moonGroup.add(moonHalo, moonDisk);
   celestial.add(moonGroup);
 
   // Round star sprites twinkle independently instead of looking like a static grid.
@@ -304,6 +273,7 @@ function addWorldInstances(
     });
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
     mesh.frustumCulled = true;
     mesh.castShadow = castShadow;
     mesh.receiveShadow = receiveShadow;
@@ -542,20 +512,20 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const drainMat = std(0x3c4142, 0.78, { metalness: 0.22 });
   const drainForHorizontal = (x: number, z: number) => B.box(drainMat, 1.35, 0.045, 0.56, x, 0.185, z);
   const drainForVertical = (x: number, z: number) => B.box(drainMat, 0.56, 0.045, 1.35, x, 0.185, z);
+  // Street lights on every road, alternating sides, arms reaching over the carriageway.
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi], width = halfZ[zi];
-    if (width < 18) continue;
     for (let side of [-1, 1]) {
       const curbZ = z + side * (width / 2 - 0.5);
       for (let x = -EDGE + 90; x < EDGE; x += 120) if (!blocked(x - 1, x + 1, curbZ - 1, curbZ + 1)) drainForHorizontal(x, curbZ);
     }
-    for (let x = -EDGE + 140; x < EDGE; x += 240) {
-      const side = x < 0 ? -1 : 1;
+    for (let x = -EDGE + 140, n = 0; x < EDGE; x += 160, n++) {
+      const side = n % 2 === 0 ? -1 : 1;
       const poleX = x, poleZ = z + side * (width / 2 + 5);
       if (blocked(poleX - 2, poleX + 2, poleZ - 2, poleZ + 2)) continue;
       B.add(signalMetal, streetPole, poleX, 4.3, poleZ);
-      B.box(signalMetal, 0.18, 0.18, 2.6, poleX, 8.45, poleZ - side * 1.15);
-      const headZ = poleZ - side * 2.25;
+      B.box(signalMetal, 0.18, 0.18, 6, poleX, 8.45, poleZ - side * 2.75);
+      const headZ = poleZ - side * 5.5;
       B.box(streetGlow, 1.25, 0.24, 0.72, poleX, 8.3, headZ);
       streetLights.push({ x: poleX, z: headZ, y: 8.3 });
       colliders.push(circleCol(poleX, poleZ, 0.5));
@@ -563,18 +533,17 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   }
   for (let xi = 0; xi < hx.length; xi++) {
     const x = hx[xi], width = halfX[xi];
-    if (width < 18) continue;
     for (const side of [-1, 1]) {
       const curbX = x + side * (width / 2 - 0.5);
       for (let z = -EDGE + 90; z < EDGE; z += 120) if (!blocked(curbX - 1, curbX + 1, z - 1, z + 1)) drainForVertical(curbX, z);
     }
-    for (let z = -EDGE + 140; z < EDGE; z += 240) {
-      const side = z < 0 ? -1 : 1;
+    for (let z = -EDGE + 140, n = 0; z < EDGE; z += 160, n++) {
+      const side = n % 2 === 0 ? -1 : 1;
       const poleX = x + side * (width / 2 + 5), poleZ = z;
       if (blocked(poleX - 2, poleX + 2, poleZ - 2, poleZ + 2)) continue;
       B.add(signalMetal, streetPole, poleX, 4.3, poleZ);
-      B.box(signalMetal, 2.6, 0.18, 0.18, poleX - side * 1.15, 8.45, poleZ);
-      const headX = poleX - side * 2.25;
+      B.box(signalMetal, 6, 0.18, 0.18, poleX - side * 2.75, 8.45, poleZ);
+      const headX = poleX - side * 5.5;
       B.box(streetGlow, 0.72, 0.24, 1.25, headX, 8.3, poleZ);
       streetLights.push({ x: headX, z: poleZ, y: 8.3 });
       colliders.push(circleCol(poleX, poleZ, 0.5));
@@ -655,6 +624,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const bulbMesh = new THREE.InstancedMesh(bulbGeo, bulbMaterial, bulbMatrices.length);
   bulbMatrices.forEach((matrix, i) => bulbMesh.setMatrixAt(i, matrix));
   bulbMesh.instanceMatrix.needsUpdate = true;
+  bulbMesh.computeBoundingSphere();
   bulbMesh.frustumCulled = true;
   scene.add(bulbMesh);
   // One shared countdown texture per (offset, axis) group — updated once per second.
@@ -672,6 +642,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     const mesh = new THREE.InstancedMesh(timerGeo, new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }), mats.length);
     mats.forEach((m, i) => mesh.setMatrixAt(i, m));
     mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
     mesh.frustumCulled = true;
     scene.add(mesh);
   }

@@ -264,6 +264,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   tufts.receiveShadow = true;
   tufts.instanceMatrix.needsUpdate = true;
   if (tufts.instanceColor) tufts.instanceColor.needsUpdate = true;
+  tufts.computeBoundingSphere();
   scene.add(tufts);
 
   const nFlower = mobile ? 600 : 1400;
@@ -289,6 +290,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   scene.add(flowers);
   flowers.instanceMatrix.needsUpdate = true;
   if (flowers.instanceColor) flowers.instanceColor.needsUpdate = true;
+  flowers.computeBoundingSphere();
 
   /* ---------- real fountain water ---------- */
   const waterMat = new THREE.ShaderMaterial({

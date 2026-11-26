@@ -37,7 +37,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
   renderer.setSize(host.clientWidth, host.clientHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = true;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.02;
@@ -77,8 +77,8 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   key.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
   Object.assign(key.shadow.camera, { left: -145, right: 145, top: 145, bottom: -145, near: 8, far: 420 });
   key.shadow.camera.updateProjectionMatrix();
-  key.shadow.bias = -0.0005;
-  key.shadow.normalBias = 0.025;
+  key.shadow.bias = -0.0004;
+  key.shadow.normalBias = 0.06;
   scene.add(key, key.target);
   const tmpLightTarget = new THREE.Vector3();
 
@@ -511,10 +511,11 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
     hall.interiorLights.forEach((light) => { light.intensity = (1 - day) * 480; });
     hemi.intensity = 0.24 + 0.71 * day;
     hemi.color.setHex(0x2a3a5c).lerp(new THREE.Color(0xcfe4ff), day);
-    key.intensity = 0.55 + 2.35 * day;
+    key.intensity = 0.9 + 2.0 * day;
     key.color.setHex(0x9db6e8).lerp(new THREE.Color(0xfff0d6), day);
     const sunFrom = MOON_DIR.clone().lerp(SUN_DIR, day).normalize();
-    const lightTarget = tmpLightTarget.set(pos.x, y, pos.z);
+    // Snap the shadow target to a 0.5-unit grid so texels stay stable while walking (no flicker).
+    const lightTarget = tmpLightTarget.set(Math.round(pos.x * 2) / 2, y, Math.round(pos.z * 2) / 2);
     key.position.copy(sunFrom).multiplyScalar(160).add(lightTarget);
     key.target.position.copy(lightTarget);
     (scene.fog as THREE.Fog).color.setHex(0x0a1220).lerp(new THREE.Color(0xd3e3ee), day);
