@@ -53,23 +53,23 @@ export function createSky(): Sky {
         vec3 col = mix(nightCol, dayCol, uDay);
 
         float sunAmt = max(dot(dir, uSun), 0.0);
-        col += vec3(1.0, 0.83, 0.58) * pow(sunAmt, 34.0) * 0.32 * uDay;
-        col += vec3(1.0, 0.96, 0.84) * smoothstep(0.999976, 0.999994, sunAmt) * 3.6 * uDay;
+        col += vec3(1.0, 0.83, 0.58) * pow(sunAmt, 28.0) * 0.45 * uDay;
+        col += vec3(1.0, 0.96, 0.84) * smoothstep(0.999904, 0.999976, sunAmt) * 3.8 * uDay;
 
         float moonAmt = max(dot(dir, uMoon), 0.0);
-        col += vec3(0.42, 0.52, 0.86) * pow(moonAmt, 36.0) * 0.22 * (1.0 - uDay);
-        col += vec3(0.90, 0.94, 1.0) * smoothstep(0.999978, 0.999994, moonAmt) * 3.0 * (1.0 - uDay);
+        col += vec3(0.55, 0.66, 0.98) * pow(moonAmt, 30.0) * 0.42 * (1.0 - uDay);
+        col += vec3(0.92, 0.96, 1.0) * smoothstep(0.999912, 0.999978, moonAmt) * 3.4 * (1.0 - uDay);
 
         float horizon = pow(1.0 - abs(dir.y), 10.0);
         col += vec3(0.95, 0.55, 0.3) * horizon * 0.16 * (1.0 - uDay);
 
         vec3 sp = floor(dir * 240.0);
         float seed = hash31(sp);
-        float twinkle = 0.58 + 0.42 * sin(uTime * (1.3 + seed * 3.1) + seed * 39.0);
-        float clearOfSun = 1.0 - smoothstep(0.99992, 0.99999, sunAmt);
-        float clearOfMoon = 1.0 - smoothstep(0.99992, 0.99999, moonAmt);
-        float star = smoothstep(0.9962, 1.0, seed) * smoothstep(-0.03, 0.3, dir.y) * (1.0 - uDay) * twinkle * clearOfSun * clearOfMoon;
-        col += vec3(star * 1.9);
+        float twinkle = 0.72 + 0.28 * sin(uTime * (1.3 + seed * 3.1) + seed * 39.0);
+        float clearOfSun = 1.0 - smoothstep(0.99980, 0.99997, sunAmt);
+        float clearOfMoon = 1.0 - smoothstep(0.99980, 0.99997, moonAmt);
+        float star = smoothstep(0.9935, 1.0, seed) * smoothstep(-0.03, 0.3, dir.y) * (1.0 - uDay) * twinkle * clearOfSun * clearOfMoon;
+        col += vec3(star * 2.8);
 
         gl_FragColor = vec4(pow(max(col, 0.0), vec3(2.2)), 1.0);
         #include <tonemapping_fragment>
@@ -86,7 +86,7 @@ export function createSky(): Sky {
   const sunGroup = new THREE.Group();
   sunGroup.position.copy(SUN_DIR).multiplyScalar(1450);
   const sunDisk = new THREE.Mesh(
-    new THREE.SphereGeometry(8, 24, 18),
+    new THREE.SphereGeometry(16, 24, 18),
     new THREE.MeshBasicMaterial({ color: 0xfff4d0, toneMapped: false })
   );
   const haloTexture = tex(128, 128, (ctx, w, h) => {
@@ -99,46 +99,79 @@ export function createSky(): Sky {
     ctx.fillRect(0, 0, w, h);
   }, false);
   const sunHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xffebc3, transparent: true, depthWrite: false, toneMapped: false }));
-  sunHalo.scale.set(150, 150, 1);
-  sunGroup.add(sunHalo, sunDisk);
+  sunHalo.scale.set(300, 300, 1);
+  const sunOuterHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xffd9a0, transparent: true, opacity: 0.35, depthWrite: false, toneMapped: false }));
+  sunOuterHalo.scale.set(520, 520, 1);
+  sunGroup.add(sunOuterHalo, sunHalo, sunDisk);
   celestial.add(sunGroup);
 
   const moonGroup = new THREE.Group();
   moonGroup.position.copy(MOON_DIR).multiplyScalar(1450);
-  const lunarMap = tex(256, 128, (ctx, w, h) => {
+  const lunarMap = tex(512, 256, (ctx, w, h) => {
     const g = ctx.createRadialGradient(w * 0.38, h * 0.4, 2, w * 0.5, h * 0.5, w * 0.8);
-    g.addColorStop(0, "#f5f4eb");
-    g.addColorStop(0.55, "#d9dce2");
-    g.addColorStop(1, "#8d96a7");
+    g.addColorStop(0, "#ffffff");
+    g.addColorStop(0.45, "#f2f3f5");
+    g.addColorStop(0.75, "#d5d9e2");
+    g.addColorStop(1, "#9aa4b8");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
+    // Dark maria (lunar seas) for a realistic moon face.
+    const mariaRand = rng(777);
+    for (let i = 0; i < 22; i++) {
+      const x = w * 0.5 + (mariaRand() - 0.5) * w * 0.55;
+      const y = h * 0.5 + (mariaRand() - 0.5) * h * 0.55;
+      const radius = 18 + mariaRand() * 46;
+      const mg = ctx.createRadialGradient(x, y, 1, x, y, radius);
+      mg.addColorStop(0, "rgba(88,96,116,0.34)");
+      mg.addColorStop(0.7, "rgba(104,112,132,0.18)");
+      mg.addColorStop(1, "rgba(104,112,132,0)");
+      ctx.fillStyle = mg;
+      ctx.beginPath();
+      ctx.ellipse(x, y, radius, radius * (0.6 + mariaRand() * 0.5), mariaRand() * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
     const craterRand = rng(1421);
-    for (let i = 0; i < 85; i++) {
+    for (let i = 0; i < 150; i++) {
       const x = craterRand() * w, y = craterRand() * h;
-      const radius = 1.5 + craterRand() * 10;
-      if (Math.hypot(x - w * 0.5, y - h * 0.5) < radius + 16) continue;
+      const radius = 2 + craterRand() * 18;
+      if (Math.hypot(x - w * 0.5, y - h * 0.5) < radius + 30) continue;
       const cg = ctx.createRadialGradient(x - radius * 0.22, y - radius * 0.25, radius * 0.05, x, y, radius);
-      cg.addColorStop(0, "rgba(255,255,250,0.22)");
-      cg.addColorStop(0.72, "rgba(97,105,121,0.14)");
-      cg.addColorStop(1, "rgba(42,48,62,0.3)");
+      cg.addColorStop(0, "rgba(255,255,252,0.34)");
+      cg.addColorStop(0.72, "rgba(97,105,121,0.2)");
+      cg.addColorStop(1, "rgba(42,48,62,0.42)");
       ctx.fillStyle = cg;
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
+      // Bright crater rim highlight.
+      ctx.strokeStyle = "rgba(255,255,255,0.22)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.92, Math.PI * 1.05, Math.PI * 1.85);
+      ctx.stroke();
     }
+    // Bright limb glow around the edge.
+    const limb = ctx.createRadialGradient(w * 0.5, h * 0.5, w * 0.32, w * 0.5, h * 0.5, w * 0.52);
+    limb.addColorStop(0, "rgba(255,255,255,0)");
+    limb.addColorStop(0.85, "rgba(255,255,255,0.12)");
+    limb.addColorStop(1, "rgba(255,255,255,0.34)");
+    ctx.fillStyle = limb;
+    ctx.fillRect(0, 0, w, h);
   }, false);
   const moonDisk = new THREE.Mesh(
-    new THREE.SphereGeometry(7.2, 24, 18),
-    new THREE.MeshBasicMaterial({ map: lunarMap, color: 0xe8edff, toneMapped: false })
+    new THREE.SphereGeometry(14.4, 32, 24),
+    new THREE.MeshBasicMaterial({ map: lunarMap, color: 0xf4f7ff, toneMapped: false })
   );
-  const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0x9dbaff, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }));
-  moonHalo.scale.set(95, 95, 1);
-  moonGroup.add(moonHalo, moonDisk);
+  const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xcfe0ff, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }));
+  moonHalo.scale.set(190, 190, 1);
+  const moonOuterHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0x9dbaff, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }));
+  moonOuterHalo.scale.set(340, 340, 1);
+  moonGroup.add(moonOuterHalo, moonHalo, moonDisk);
   celestial.add(moonGroup);
 
   // Round star sprites twinkle independently instead of looking like a static grid.
   const starSeed = rng(84217);
-  const starCount = 760;
+  const starCount = 1800;
   const starPositions = new Float32Array(starCount * 3);
   const starPhases = new Float32Array(starCount);
   const starSizes = new Float32Array(starCount);
@@ -156,7 +189,7 @@ export function createSky(): Sky {
     starPositions[i * 3 + 1] = y * 1450;
     starPositions[i * 3 + 2] = Math.sin(azimuth) * radius * 1450;
     starPhases[i] = starSeed() * Math.PI * 2;
-    starSizes[i] = 2.4 + starSeed() * 2.8;
+    starSizes[i] = 3.2 + starSeed() * 4.2;
   }
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
@@ -172,8 +205,8 @@ export function createSky(): Sky {
       varying float vTwinkle;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vTwinkle = 0.42 + 0.58 * (0.5 + 0.5 * sin(uTime * (1.4 + aPhase * 0.3) + aPhase));
-        gl_PointSize = clamp(aSize * (1250.0 / max(1.0, -mv.z)), 1.0, 5.0);
+        vTwinkle = 0.62 + 0.38 * (0.5 + 0.5 * sin(uTime * (1.4 + aPhase * 0.3) + aPhase));
+        gl_PointSize = clamp(aSize * (1250.0 / max(1.0, -mv.z)), 1.5, 8.0);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: `
@@ -182,9 +215,9 @@ export function createSky(): Sky {
         vec2 p = gl_PointCoord - 0.5;
         float d = length(p);
         float edge = 1.0 - smoothstep(0.28, 0.5, d);
-        float glow = exp(-d * 11.0) * 0.34;
+        float glow = exp(-d * 9.0) * 0.55;
         float a = (edge + glow) * (1.0 - uDay) * vTwinkle;
-        gl_FragColor = vec4(vec3(0.76, 0.84, 1.0), a);
+        gl_FragColor = vec4(vec3(0.88, 0.94, 1.0), a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -217,9 +250,11 @@ const GRID = 24; // boundary-to-boundary is just under 10 km
 const EDGE = GRID * CELL + 130;
 export const WORLD_LIMIT = EDGE + 23;
 
-/** rectangles the open-world grid must not pave over (the park + its road) */
+/** rectangles the open-world grid must not pave over (the park + its road).
+ *  The main rect covers the park plus 2 roads behind / right / left of the hall
+ *  (grass instead of road); the front road stays. */
 const CUT = [
-  { x1: -176, x2: 176, z1: -140, z2: 85 },
+  { x1: -340, x2: 340, z1: -350, z2: 85 },
   { x1: -260, x2: 260, z1: 85, z2: 99 },
 ];
 const blocked = (x1: number, x2: number, z1: number, z2: number) =>
@@ -302,7 +337,6 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   asphalt.normalMap = asphaltNormal;
   asphalt.normalScale.set(0.16, 0.16);
   asphalt.roughness = 0.9;
-  const kerb = std(0xb9b1a0, 0.9);
   const white = std(0xe9e5d8, 0.85);
   const signalMetal = std(0x20272b, 0.48, { metalness: 0.65 });
   const signTex = tex(256, 256, (c, w, h) => {
@@ -362,11 +396,9 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     for (const [z1, z2] of freeRuns(-EDGE, EDGE, cuts)) road(x - width / 2, z1, x + width / 2, z2);
   }
 
-  // lane dashes + roadside kerbs
+  // lane dashes (broken centre lines stay on the roads that remain)
   const dashG = new THREE.BoxGeometry(4.2, 0.03, 0.75);
   const dashes: WorldInstance[] = [];
-  const kerbG = new THREE.BoxGeometry(1, 0.55, 1.1);
-  const kerbs: WorldInstance[] = [];
   const medians: WorldInstance[] = [];
   const m4 = new THREE.Matrix4();
   for (let zi = 0; zi < hz.length; zi++) {
@@ -401,17 +433,6 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
         colliders.push(boxCol((a + b) / 2, z, length, 3.65));
       }
     }
-    for (const s of [-1, 1]) {
-      const z2 = z + s * (width / 2 + 0.55);
-      const curbCuts: Array<[number, number]> = hx.map((crossX, i) => [crossX - halfX[i] / 2 - 3, crossX + halfX[i] / 2 + 3]);
-      for (const c of CUT) if (z2 >= c.z1 - 0.6 && z2 <= c.z2 + 0.6) curbCuts.push([c.x1, c.x2]);
-      for (const [start, end] of freeRuns(-EDGE, EDGE, curbCuts)) {
-        for (let x = start; x < end; x += 16) {
-          if (blocked(x, x + 16, z2 - 1, z2 + 1)) continue;
-          kerbs.push({ matrix: m4.clone().makeTranslation(x + 8, 0.32, z2).multiply(new THREE.Matrix4().makeScale(16, 1, 1)) });
-        }
-      }
-    }
   }
   for (let xi = 0; xi < hx.length; xi++) {
     const x = hx[xi];
@@ -437,20 +458,8 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
         colliders.push(boxCol(x, (a + b) / 2, medianWidth + 0.05, length));
       }
     }
-    for (const s of [-1, 1]) {
-      const x2 = x + s * (width / 2 + 0.55);
-      const curbCuts: Array<[number, number]> = hz.map((crossZ, i) => [crossZ - halfZ[i] / 2 - 3, crossZ + halfZ[i] / 2 + 3]);
-      for (const c of CUT) if (x2 >= c.x1 - 0.6 && x2 <= c.x2 + 0.6) curbCuts.push([c.z1, c.z2]);
-      for (const [start, end] of freeRuns(-EDGE, EDGE, curbCuts)) {
-        for (let z = start; z < end; z += 16) {
-          if (blocked(x2 - 1, x2 + 1, z, z + 16)) continue;
-          kerbs.push({ matrix: m4.clone().makeTranslation(x2, 0.32, z + 8).multiply(new THREE.Matrix4().makeScale(1, 1, 16)) });
-        }
-      }
-    }
   }
   addWorldInstances(scene, dashG, white, dashes, 800, false, false);
-  addWorldInstances(scene, kerbG, kerb, kerbs, 800, false, true);
   addWorldInstances(scene, new THREE.BoxGeometry(1, 0.34, 1), std(0x777468, 0.9), medians, 800, false, true);
 
   // Zebra crossings sit only at connected junctions, never drift onto the grass.

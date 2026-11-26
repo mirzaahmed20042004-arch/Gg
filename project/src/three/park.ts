@@ -59,15 +59,16 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   /* ---------- solid props ---------- */
   const P = new Batch();
   const lampPos: { x: number; y: number; z: number }[] = [];
-  for (const z of [79.6, 104.4]) P.box(stoneM, 460, 0.6, 0.9, 0, 0.3, z);
 
-  // hedges framing the forecourt + park boundary
+  // grass walls (hedges) enclose the park on back / right / left, meeting at the corners
   for (const s of [-1, 1]) {
     P.box(hedgeM, 2.4, 3.4, 30, s * 41.5, 1.7, -19, 0, 5);
     colliders.push(boxCol(s * 41.5, -19, 2.8, 30.4));
-    P.box(hedgeM, 3, 5, 250, s * 143, 2.5, -8, 0, 5);
+    P.box(hedgeM, 3.2, 7, 262, s * 143, 3.5, -8, 0, 5);
+    colliders.push(boxCol(s * 143, -8, 3.6, 262.4));
   }
-  P.box(hedgeM, 289, 5, 3, 0, 2.5, -129, 0, 5);
+  P.box(hedgeM, 289, 7, 3.2, 0, 3.5, -129, 0, 5);
+  colliders.push(boxCol(0, -129, 289.4, 3.6));
 
   // Victorian street lamps
   const postG = lathe([[1.05, 0], [1.05, 0.5], [0.7, 0.9], [0.5, 2.4], [0.64, 2.7], [0.34, 3.2], [0.24, 11.2], [0.55, 11.6], [0.78, 12.1]], 8);
@@ -205,6 +206,13 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     tree(x, z, 0.85 + r() * 0.5, true);
   }
   for (let i = 0; i < 22; i++) { const a = (i / 22) * Math.PI * 1.5 + Math.PI * 0.75; tree(Math.cos(a) * 168, -10 + Math.sin(a) * 150, 1.5 + r() * 0.5, false); }
+  // corner trees just inside the grass walls (back / right / left)
+  for (const s of [-1, 1]) {
+    tree(s * 134, -120, 1.35, true);
+    tree(s * 134, -70, 1.15, true);
+    tree(s * 134, -20, 1.2, true);
+  }
+  tree(-70, -120, 1.25, true); tree(0, -120, 1.4, true); tree(70, -120, 1.25, true);
   P.build(scene);
 
   /* ---------- grass tufts + flowers (instanced) ---------- */
