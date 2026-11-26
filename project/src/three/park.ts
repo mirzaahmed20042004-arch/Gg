@@ -445,7 +445,8 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     lampMaterial: lampGlass,
     waterfallMat,
     update(t: number, day: number) {
-      lampGlass.emissiveIntensity = 0.03 + (1 - day) * 2.1;
+      // Park lamps: fully off in daylight, bright at night (auto by day factor).
+      lampGlass.emissiveIntensity = (1 - day) * 3.2;
       waterMat.uniforms.uTime.value = t;
       waterMat.uniforms.uDay.value = day;
       waterfallMat.uniforms.uTime.value = t;

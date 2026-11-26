@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Batch, tex, speckle, std, mapped, boxCol, circleCol, rng, type Collider } from "./kit";
 
 export const SUN_DIR = new THREE.Vector3(0.44, 0.58, 0.69).normalize();
-export const MOON_DIR = new THREE.Vector3(-0.5, 0.56, -0.66).normalize();
+export const MOON_DIR = new THREE.Vector3(-0.5, 0.78, -0.66).normalize();
 
 /* ------------------------------ sky dome ------------------------------ */
 export interface Sky {
@@ -57,8 +57,8 @@ export function createSky(): Sky {
         col += vec3(1.0, 0.96, 0.84) * smoothstep(0.999904, 0.999976, sunAmt) * 3.8 * uDay;
 
         float moonAmt = max(dot(dir, uMoon), 0.0);
-        col += vec3(0.55, 0.66, 0.98) * pow(moonAmt, 30.0) * 0.42 * (1.0 - uDay);
-        col += vec3(0.92, 0.96, 1.0) * smoothstep(0.999912, 0.999978, moonAmt) * 3.4 * (1.0 - uDay);
+        col += vec3(0.62, 0.72, 1.0) * pow(moonAmt, 30.0) * 0.6 * (1.0 - uDay);
+        col += vec3(0.95, 0.98, 1.0) * smoothstep(0.999912, 0.999978, moonAmt) * 4.5 * (1.0 - uDay);
 
         float horizon = pow(1.0 - abs(dir.y), 10.0);
         col += vec3(0.95, 0.55, 0.3) * horizon * 0.16 * (1.0 - uDay);
@@ -68,8 +68,8 @@ export function createSky(): Sky {
         float twinkle = 0.72 + 0.28 * sin(uTime * (1.3 + seed * 3.1) + seed * 39.0);
         float clearOfSun = 1.0 - smoothstep(0.99980, 0.99997, sunAmt);
         float clearOfMoon = 1.0 - smoothstep(0.99980, 0.99997, moonAmt);
-        float star = smoothstep(0.9935, 1.0, seed) * smoothstep(-0.03, 0.3, dir.y) * (1.0 - uDay) * twinkle * clearOfSun * clearOfMoon;
-        col += vec3(star * 2.8);
+        float star = smoothstep(0.995, 1.0, seed) * smoothstep(-0.03, 0.3, dir.y) * (1.0 - uDay) * twinkle * clearOfSun * clearOfMoon;
+        col += vec3(star * 2.4);
 
         gl_FragColor = vec4(pow(max(col, 0.0), vec3(2.2)), 1.0);
         #include <tonemapping_fragment>
@@ -160,18 +160,18 @@ export function createSky(): Sky {
   }, false);
   const moonDisk = new THREE.Mesh(
     new THREE.SphereGeometry(14.4, 32, 24),
-    new THREE.MeshBasicMaterial({ map: lunarMap, color: 0xf4f7ff, toneMapped: false })
+    new THREE.MeshBasicMaterial({ map: lunarMap, color: 0xffffff, toneMapped: false })
   );
-  const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xcfe0ff, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }));
+  const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xdceaff, transparent: true, opacity: 1.0, depthWrite: false, toneMapped: false }));
   moonHalo.scale.set(190, 190, 1);
-  const moonOuterHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0x9dbaff, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }));
+  const moonOuterHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color: 0xaec8ff, transparent: true, opacity: 0.6, depthWrite: false, toneMapped: false }));
   moonOuterHalo.scale.set(340, 340, 1);
   moonGroup.add(moonOuterHalo, moonHalo, moonDisk);
   celestial.add(moonGroup);
 
   // Round star sprites twinkle independently instead of looking like a static grid.
   const starSeed = rng(84217);
-  const starCount = 1800;
+  const starCount = 700;
   const starPositions = new Float32Array(starCount * 3);
   const starPhases = new Float32Array(starCount);
   const starSizes = new Float32Array(starCount);
@@ -338,6 +338,17 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   asphalt.normalScale.set(0.16, 0.16);
   asphalt.roughness = 0.9;
   const white = std(0xe9e5d8, 0.85);
+  // Real concrete footpath (median) with subtle paving joints.
+  const medianM = mapped(
+    tex(256, 256, (c, w, h) => {
+      speckle(c, w, h, "#b5b0a4", ["#a39d90", "#c7c2b6", "#8f8a7e"], 3600, 5, 9);
+      c.strokeStyle = "rgba(70,66,58,0.45)";
+      c.lineWidth = 3;
+      for (let y = 0; y < h; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      for (let x = 0; x < w; x += 64) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+    }),
+    0.92
+  );
   const signalMetal = std(0x20272b, 0.48, { metalness: 0.65 });
   const signTex = tex(256, 256, (c, w, h) => {
     c.clearRect(0, 0, w, h);
@@ -415,22 +426,23 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       }
     }
     if (width === 32) {
-      const cuts: Array<[number, number]> = hx.map((x, i) => [x - (halfX[i] / 2 + 1.4), x + (halfX[i] / 2 + 1.4)]);
+      // Wider breaks at zebra junctions (i % 4) so the footpath never crosses the crossing.
+      const cuts: Array<[number, number]> = hx.map((x, i) => [x - (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4)), x + (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4))]);
       for (const c of CUT) if (z >= c.z1 - width / 2 && z <= c.z2 + width / 2) cuts.push([c.x1 - width, c.x2 + width]);
       for (const [a, b] of freeRuns(-EDGE, EDGE, cuts)) {
         const length = b - a;
         if (length < 12) continue;
-        medians.push({ matrix: m4.clone().makeTranslation((a + b) / 2, 0.18, z).multiply(new THREE.Matrix4().makeScale(length, 1, 2.2)) });
-        colliders.push(boxCol((a + b) / 2, z, length, 2.25));
+        medians.push({ matrix: m4.clone().makeTranslation((a + b) / 2, 0.18, z).multiply(new THREE.Matrix4().makeScale(length, 1, 1.6)) });
+        colliders.push(boxCol((a + b) / 2, z, length, 1.65));
       }
     } else if (width === 46) {
-      const cuts: Array<[number, number]> = hx.map((x, i) => [x - (halfX[i] / 2 + 1.8), x + (halfX[i] / 2 + 1.8)]);
+      const cuts: Array<[number, number]> = hx.map((x, i) => [x - (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.8)), x + (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.8))]);
       for (const c of CUT) if (z >= c.z1 - width / 2 && z <= c.z2 + width / 2) cuts.push([c.x1 - width, c.x2 + width]);
       for (const [a, b] of freeRuns(-EDGE, EDGE, cuts)) {
         const length = b - a;
         if (length < 12) continue;
-        medians.push({ matrix: m4.clone().makeTranslation((a + b) / 2, 0.18, z).multiply(new THREE.Matrix4().makeScale(length, 1, 3.6)) });
-        colliders.push(boxCol((a + b) / 2, z, length, 3.65));
+        medians.push({ matrix: m4.clone().makeTranslation((a + b) / 2, 0.18, z).multiply(new THREE.Matrix4().makeScale(length, 1, 2.0)) });
+        colliders.push(boxCol((a + b) / 2, z, length, 2.05));
       }
     }
   }
@@ -448,19 +460,19 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       }
     }
     if (width >= 32) {
-      const cuts: Array<[number, number]> = hz.map((z, i) => [z - (halfZ[i] / 2 + 1.4), z + (halfZ[i] / 2 + 1.4)]);
+      const cuts: Array<[number, number]> = hz.map((z, i) => [z - (halfZ[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4)), z + (halfZ[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4))]);
       for (const c of CUT) if (x >= c.x1 - width / 2 && x <= c.x2 + width / 2) cuts.push([c.z1 - width, c.z2 + width]);
       for (const [a, b] of freeRuns(-EDGE, EDGE, cuts)) {
         const length = b - a;
         if (length < 12) continue;
-        const medianWidth = width === 46 ? 3.6 : 2.2;
+        const medianWidth = width === 46 ? 2.0 : 1.6;
         medians.push({ matrix: m4.clone().makeTranslation(x, 0.18, (a + b) / 2).multiply(new THREE.Matrix4().makeScale(medianWidth, 1, length)) });
         colliders.push(boxCol(x, (a + b) / 2, medianWidth + 0.05, length));
       }
     }
   }
   addWorldInstances(scene, dashG, white, dashes, 800, false, false);
-  addWorldInstances(scene, new THREE.BoxGeometry(1, 0.34, 1), std(0x777468, 0.9), medians, 800, false, true);
+  addWorldInstances(scene, new THREE.BoxGeometry(1, 0.34, 1), medianM, medians, 800, false, true);
 
   // Zebra crossings sit only at connected junctions, never drift onto the grass.
   const crossingRecords: WorldInstance[] = [];
@@ -477,17 +489,36 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       const x = hx[xi], z = hz[zi], widthX = halfX[xi], widthZ = halfZ[zi];
       if (blocked(x - widthX / 2, x + widthX / 2, z - widthZ / 2, z + widthZ / 2)) continue;
       // Four approaches: five broad bars across each carriageway.
+      // On divided roads the bars split around the footpath so the median never crosses the crossing.
+      const medW = (w: number) => (w === 46 ? 2.0 : w === 32 ? 1.6 : 0);
       for (const side of [-1, 1]) {
         for (let n = 0; n < 5; n++) {
           const alongX = x + side * (widthX / 2 + 3.2 + n * 0.92);
           const alongZ = z + side * (widthZ / 2 + 3.2 + n * 0.92);
-          crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.176, z).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthZ - 2))) });
-          crossingRecords.push({ matrix: m4.clone().makeTranslation(x, 0.176, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthX - 2))) });
+          const mZ = medW(widthZ), mX = medW(widthX);
+          if (mZ > 0) {
+            const half = widthZ / 2 - 1, gap = mZ / 2 + 0.35;
+            const segLen = half - gap;
+            for (const s2 of [-1, 1]) {
+              crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.176, z + s2 * (gap + segLen / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, segLen)) });
+            }
+          } else {
+            crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.176, z).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthZ - 2))) });
+          }
+          if (mX > 0) {
+            const half = widthX / 2 - 1, gap = mX / 2 + 0.35;
+            const segLen = half - gap;
+            for (const s2 of [-1, 1]) {
+              crossingRecords.push({ matrix: m4.clone().makeTranslation(x + s2 * (gap + segLen / 2), 0.176, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, segLen)) });
+            }
+          } else {
+            crossingRecords.push({ matrix: m4.clone().makeTranslation(x, 0.176, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthX - 2))) });
+          }
         }
       }
       // Separate through and left-turn lane arrows on divided approaches.
-      const medX = widthX === 46 ? 3.6 : 2.2;
-      const medZ = widthZ === 46 ? 3.6 : 2.2;
+      const medX = widthX === 46 ? 2.0 : 1.6;
+      const medZ = widthZ === 46 ? 2.0 : 1.6;
       const innerX = medX / 2 + (widthX - medX) / 8;
       const outerX = medX / 2 + 3 * (widthX - medX) / 8;
       const innerZ = medZ / 2 + (widthZ - medZ) / 8;
@@ -513,7 +544,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const drainForVertical = (x: number, z: number) => B.box(drainMat, 0.56, 0.045, 1.35, x, 0.185, z);
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi], width = halfZ[zi];
-    if (width < 30) continue;
+    if (width < 18) continue;
     for (let side of [-1, 1]) {
       const curbZ = z + side * (width / 2 - 0.5);
       for (let x = -EDGE + 90; x < EDGE; x += 120) if (!blocked(x - 1, x + 1, curbZ - 1, curbZ + 1)) drainForHorizontal(x, curbZ);
@@ -532,7 +563,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   }
   for (let xi = 0; xi < hx.length; xi++) {
     const x = hx[xi], width = halfX[xi];
-    if (width < 30) continue;
+    if (width < 18) continue;
     for (const side of [-1, 1]) {
       const curbX = x + side * (width / 2 - 0.5);
       for (let z = -EDGE + 90; z < EDGE; z += 120) if (!blocked(curbX - 1, curbX + 1, z - 1, z + 1)) drainForVertical(curbX, z);
@@ -572,15 +603,32 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   }
 
   // Signal poles and heads are batched; only the lens colors animate at phase changes.
+  // Real 4-way timing: 30s green, 4s yellow, 2s all-red per axis (72s cycle) + countdown timers.
+  const SIG_GREEN = 30, SIG_YELLOW = 4, SIG_CLEAR = 2;
+  const SIG_CYCLE = (SIG_GREEN + SIG_YELLOW + SIG_CLEAR) * 2; // 72
+  const axisState = (t: number, axis: 0 | 1): { lamp: "green" | "amber" | "red"; remain: number } => {
+    if (axis === 0) {
+      if (t < SIG_GREEN) return { lamp: "green", remain: Math.ceil(SIG_GREEN - t) };
+      if (t < SIG_GREEN + SIG_YELLOW) return { lamp: "amber", remain: Math.ceil(SIG_GREEN + SIG_YELLOW - t) };
+      return { lamp: "red", remain: Math.ceil(SIG_CYCLE - t) };
+    }
+    const half = SIG_GREEN + SIG_YELLOW + SIG_CLEAR; // 36
+    if (t < half) return { lamp: "red", remain: Math.ceil(half - t) };
+    if (t < half + SIG_GREEN) return { lamp: "green", remain: Math.ceil(half + SIG_GREEN - t) };
+    if (t < half + SIG_GREEN + SIG_YELLOW) return { lamp: "amber", remain: Math.ceil(half + SIG_GREEN + SIG_YELLOW - t) };
+    return { lamp: "red", remain: Math.ceil(SIG_CYCLE - t) };
+  };
   const poleGeometry = new THREE.CylinderGeometry(0.13, 0.19, 6.3, 10);
   const bulbGeo = new THREE.SphereGeometry(0.18, 10, 8);
   const bulbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, toneMapped: false });
   const signalGroups: { first: number; axis: 0 | 1; offset: number }[] = [];
   const bulbMatrices: THREE.Matrix4[] = [];
+  const timerMatrices = new Map<string, THREE.Matrix4[]>();
   const dimRed = new THREE.Color(0x45201d), dimAmber = new THREE.Color(0x48351b), dimGreen = new THREE.Color(0x1c4029);
   const redLamp = new THREE.Color(0xff382e), amberLamp = new THREE.Color(0xffb31e), greenLamp = new THREE.Color(0x43ee7a);
-  for (let xi = 0; xi < hx.length; xi += 4) {
-    for (let zi = 0; zi < hz.length; zi += 4) {
+  // Traffic lights across the whole city (every 2nd junction).
+  for (let xi = 0; xi < hx.length; xi += 2) {
+    for (let zi = 0; zi < hz.length; zi += 2) {
       const x = hx[xi], z = hz[zi], wx = halfX[xi], wz = halfZ[zi];
       if (blocked(x - wx / 2, x + wx / 2, z - wz / 2, z + wz / 2)) continue;
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -591,9 +639,15 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
         B.box(signalMetal, 1.12, 0.16, 0.9, px, 7.57, pz);
         const first = bulbMatrices.length;
         const axis: 0 | 1 = sx === sz ? 0 : 1;
+        const offset = (xi * 17 + zi * 29) % 9;
         const lampZ = pz + (sz < 0 ? 0.38 : -0.38);
         for (let n = 0; n < 3; n++) bulbMatrices.push(m4.clone().makeTranslation(px, 7.05 - n * 0.62, lampZ).multiply(new THREE.Matrix4().makeScale(0.82, 0.82, 0.82)));
-        signalGroups.push({ first, axis, offset: (xi * 17 + zi * 29) % 9 });
+        signalGroups.push({ first, axis, offset });
+        // Countdown timer display below the head, facing traffic.
+        const tKey = `${offset}:${axis}`;
+        let tArr = timerMatrices.get(tKey);
+        if (!tArr) timerMatrices.set(tKey, (tArr = []));
+        tArr.push(m4.clone().makeTranslation(px, 4.85, lampZ).multiply(new THREE.Matrix4().makeRotationY(sz < 0 ? 0 : Math.PI)));
         colliders.push(circleCol(px, pz, 0.48));
       }
     }
@@ -603,23 +657,63 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   bulbMesh.instanceMatrix.needsUpdate = true;
   bulbMesh.frustumCulled = true;
   scene.add(bulbMesh);
+  // One shared countdown texture per (offset, axis) group — updated once per second.
+  const timerDisplays: { offset: number; axis: 0 | 1; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture }[] = [];
+  const timerGeo = new THREE.PlaneGeometry(1.15, 1.15);
+  for (const [key, mats] of timerMatrices) {
+    const [oStr, aStr] = key.split(":");
+    const offset = Number(oStr), axis = Number(aStr) as 0 | 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = 128; canvas.height = 128;
+    const ctx = canvas.getContext("2d")!;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    timerDisplays.push({ offset, axis, canvas, ctx, texture });
+    const mesh = new THREE.InstancedMesh(timerGeo, new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }), mats.length);
+    mats.forEach((m, i) => mesh.setMatrixAt(i, m));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.frustumCulled = true;
+    scene.add(mesh);
+  }
+  const drawTimer = (d: typeof timerDisplays[number], time: number) => {
+    const t = (time + d.offset) % SIG_CYCLE;
+    const st = axisState(t, d.axis);
+    const c = d.ctx;
+    c.fillStyle = "#05070a";
+    c.fillRect(0, 0, 128, 128);
+    c.strokeStyle = "#3a4148";
+    c.lineWidth = 6;
+    c.strokeRect(4, 4, 120, 120);
+    c.fillStyle = st.lamp === "green" ? "#43ee7a" : st.lamp === "amber" ? "#ffb31e" : "#ff382e";
+    c.font = "900 76px Arial, sans-serif";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.fillText(String(st.remain), 64, 68);
+    d.texture.needsUpdate = true;
+  };
   let lastSignalPhase = -1;
+  let lastTimerSec = -1;
   const updateSignals = (time: number) => {
-    const globalPhase = Math.floor((time % 36) * 2);
-    if (globalPhase === lastSignalPhase) return;
-    lastSignalPhase = globalPhase;
-    for (const signal of signalGroups) {
-      const phase = Math.floor(((time + signal.offset) % 36) / 3);
-      const greenAxis = phase < 5 ? 0 : phase < 6 ? -1 : phase < 11 ? 1 : -1;
-      const amberAxis = phase === 5 ? 0 : phase === 11 ? 1 : -1;
-      const colors = signal.axis === amberAxis
-        ? [dimRed, amberLamp, dimGreen]
-        : signal.axis === greenAxis
-          ? [dimRed, dimAmber, greenLamp]
-          : [redLamp, dimAmber, dimGreen];
-      colors.forEach((color, i) => bulbMesh.setColorAt(signal.first + i, color));
+    const globalPhase = Math.floor((time % SIG_CYCLE) * 2);
+    if (globalPhase !== lastSignalPhase) {
+      lastSignalPhase = globalPhase;
+      for (const signal of signalGroups) {
+        const t = (time + signal.offset) % SIG_CYCLE;
+        const lamp = axisState(t, signal.axis).lamp;
+        const colors = lamp === "amber"
+          ? [dimRed, amberLamp, dimGreen]
+          : lamp === "green"
+            ? [dimRed, dimAmber, greenLamp]
+            : [redLamp, dimAmber, dimGreen];
+        colors.forEach((color, i) => bulbMesh.setColorAt(signal.first + i, color));
+      }
+      if (bulbMesh.instanceColor) bulbMesh.instanceColor.needsUpdate = true;
     }
-    if (bulbMesh.instanceColor) bulbMesh.instanceColor.needsUpdate = true;
+    const sec = Math.floor(time);
+    if (sec !== lastTimerSec) {
+      lastTimerSec = sec;
+      for (const d of timerDisplays) drawTimer(d, time);
+    }
   };
 
   /* ---------- plots (empty, ready for future buildings) ---------- */
@@ -718,7 +812,8 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     streetLights,
     update(time: number, day: number) {
       updateSignals(time);
-      streetGlow.emissiveIntensity = 0.025 + (1 - day) * 1.9;
+      // Street lights: fully off in daylight, bright at night (auto by day factor).
+      streetGlow.emissiveIntensity = (1 - day) * 3.6;
     },
   };
 }
