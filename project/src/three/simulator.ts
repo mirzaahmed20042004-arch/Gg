@@ -38,7 +38,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   renderer.setSize(host.clientWidth, host.clientHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.shadowMap.autoUpdate = true;
+  renderer.shadowMap.autoUpdate = false;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.02;
 
@@ -46,7 +46,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   const sky = createSky();
   scene.add(sky.mesh, sky.celestial);
   scene.fog = new THREE.Fog(0xd3e3ee, 140, 2600);
-  const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 1.2, 6200);
+  const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 2.5, 6200);
 
   // A procedural equirectangular environment gives metal, glass and wet surfaces stable PBR reflections.
   const environment = tex(512, 256, (ctx, w, h) => {
@@ -81,6 +81,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   key.shadow.normalBias = 0.06;
   scene.add(key, key.target);
   const tmpLightTarget = new THREE.Vector3();
+  let lastShadowX = Infinity, lastShadowZ = Infinity, lastShadowDay = -1;
 
   /* ---------- world ---------- */
   const colliders: Collider[] = [];
@@ -88,11 +89,13 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   const hall = buildHall(scene, colliders, seats, mobile);
   const park = buildPark(scene, colliders, seats, mobile);
   const openWorld = buildOpenWorld(scene, colliders);
-  const lampSources = [...park.lamps, ...openWorld.streetLights];
-  const lampPool = Array.from({ length: mobile ? 8 : 12 }, () => {
+  // Fixed park-lamp lights (no reassignment while walking/flying — no exchanging).
+  const lampPool = Array.from({ length: mobile ? 8 : 12 }, (_, i) => {
     const light = new THREE.PointLight(0xffd9a2, 0, 52, 2);
+    const src = park.lamps[Math.floor((i * park.lamps.length) / (mobile ? 8 : 12)) % park.lamps.length];
+    light.position.set(src.x, src.y - 0.6, src.z);
     scene.add(light);
-    return { light, target: new THREE.Vector3(0, -999, 0), active: false };
+    return { light };
   });
   const door = hall.door;
   const rig: Rig = buildCharacter();
@@ -103,7 +106,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   const vel = new THREE.Vector3();
   let facing = Math.PI, y = 0, vy = 0, grounded = true;
   let jet = false, altitudeInput = 0;
-  let day = 1, dayTarget = 1, lampTimer = 0;
+  let day = 1, dayTarget = 1;
   let crouch = false, crouchW = 0, phase = 0, moveW = 0, airW = 0, land = 0, leanZ = 0, leanX = 0;
   let action: { name: "clap" | "kick" | "punch"; t: number } | null = null;
   let punchLeft = true;
@@ -111,16 +114,19 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   let nearSeat: Seat | null = null;
   let last: SimState = { prompt: null, crouching: false, sitting: false, night: false, jet: false };
   const move = { x: 0, y: 0 };
+  const allHeights = [...hall.heights, ...park.roofs];
   const heightAt = (x: number, z: number) => {
     let h = 0;
-    for (const r of hall.heights) if (x > r[0] && x < r[1] && z > r[2] && z < r[3]) h = Math.max(h, r[4]);
+    for (const r of allHeights) if (x > r[0] && x < r[1] && z > r[2] && z < r[3]) h = Math.max(h, r[4]);
     return h;
   };
   const keys = new Set<string>();
 
-  const resolve = (p: THREE.Vector3) => {
+  const resolve = (p: THREE.Vector3, py = 0) => {
     for (let it = 0; it < 2; it++)
       for (const c of colliders) {
+        // Real height logic: flying above a solid's top means no collision.
+        if (c.top !== undefined && py >= c.top) continue;
         if (c.kind === "circle") {
           const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), m = c.r + R;
           if (d < m) { if (d < 1e-4) p.x += m; else { p.x = c.x + (dx / d) * m; p.z = c.z + (dz / d) * m; } }
@@ -319,10 +325,11 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
 
     if (!sit) {
       if (jet) {
-        // Flight has momentum, an independent lift axis, and deliberately bypasses ground colliders.
+        // Flight has momentum and a lift axis, but still collides with every solid (walls, trees, roofs).
         pos.x = clamp(pos.x + vel.x * dt, -WORLD_LIMIT, WORLD_LIMIT);
         pos.z = clamp(pos.z + vel.z * dt, -WORLD_LIMIT, WORLD_LIMIT);
         y = clamp(y + vy * dt, heightAt(pos.x, pos.z), 1800);
+        resolve(pos, y);
       } else {
         // Substep fast motion so narrow props cannot be tunnelled through.
         const travel = Math.max(Math.abs(vel.x), Math.abs(vel.z)) * dt;
@@ -331,11 +338,11 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
         for (let i = 0; i < steps; i++) {
           const oldX = pos.x;
           pos.x += vel.x * subDt;
-          resolve(pos);
+          resolve(pos, y);
           if (Math.abs(pos.x - oldX) < Math.abs(vel.x * subDt) * 0.18) vel.x = 0;
           const oldZ = pos.z;
           pos.z += vel.z * subDt;
-          resolve(pos);
+          resolve(pos, y);
           if (Math.abs(pos.z - oldZ) < Math.abs(vel.z * subDt) * 0.18) vel.z = 0;
         }
       }
@@ -361,7 +368,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
       const k = sm(0, 1, sit.w);
       pos.x = lerp(sit.from.x, sit.seat.x, k); pos.z = lerp(sit.from.z, sit.seat.z, k);
       if (!sit.leaving) { facing += wrap(sit.seat.yaw - facing) * (1 - Math.exp(-10 * dt)); if (mag > 0.6 && sit.w >= 1) sit.leaving = true; }
-      else if (sit.w <= 0) { sit = null; resolve(pos); }
+      else if (sit.w <= 0) { sit = null; resolve(pos, y); }
     }
 
     /* ---- locomotion pose ---- */
@@ -518,25 +525,16 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
     const lightTarget = tmpLightTarget.set(Math.round(pos.x * 2) / 2, y, Math.round(pos.z * 2) / 2);
     key.position.copy(sunFrom).multiplyScalar(160).add(lightTarget);
     key.target.position.copy(lightTarget);
+    // Re-render shadows only when the light, day, or character actually moved (smooth + no waste).
+    if (lightTarget.x !== lastShadowX || lightTarget.z !== lastShadowZ || Math.abs(day - lastShadowDay) > 0.001 || spd > 0.05 || jet) {
+      renderer.shadowMap.needsUpdate = true;
+      lastShadowX = lightTarget.x; lastShadowZ = lightTarget.z; lastShadowDay = day;
+    }
     (scene.fog as THREE.Fog).color.setHex(0x0a1220).lerp(new THREE.Color(0xd3e3ee), day);
     renderer.toneMappingExposure = 1.16 - 0.14 * day;
-    lampTimer -= dt;
-    if (lampTimer <= 0) {
-      lampTimer = 0.45;
-      const near = lampSources
-        .map((l) => ({ l, d: (l.x - pos.x) ** 2 + (l.z - pos.z) ** 2 }))
-        .sort((a, b) => a.d - b.d)
-        .slice(0, lampPool.length);
-      lampPool.forEach((pl, i) => {
-        const n = near[i];
-        pl.active = !!n;
-        if (n) pl.target.set(n.l.x, n.l.y - 0.6, n.l.z);
-      });
-    }
     scene.environmentIntensity = 0.12 + day * 0.55;
     lampPool.forEach((pl) => {
-      pl.light.position.lerp(pl.target, 1 - Math.exp(-dt * 4.0));
-      pl.light.intensity = damp(pl.light.intensity, pl.active ? (1 - day) * 340 : 0, 3.5, dt);
+      pl.light.intensity = damp(pl.light.intensity, (1 - day) * 340, 3.5, dt);
     });
 
     let prompt: string | null = null;

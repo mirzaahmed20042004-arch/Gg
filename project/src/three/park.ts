@@ -63,12 +63,12 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   // grass walls (hedges) enclose the park on back / right / left, meeting at the corners
   for (const s of [-1, 1]) {
     P.box(hedgeM, 2.4, 3.4, 30, s * 41.5, 1.7, -19, 0, 5);
-    colliders.push(boxCol(s * 41.5, -19, 2.8, 30.4));
+    colliders.push(boxCol(s * 41.5, -19, 2.8, 30.4, undefined, 3.4));
     P.box(hedgeM, 3.2, 7, 262, s * 143, 3.5, -8, 0, 5);
-    colliders.push(boxCol(s * 143, -8, 3.6, 262.4));
+    colliders.push(boxCol(s * 143, -8, 3.6, 262.4, undefined, 7));
   }
   P.box(hedgeM, 289, 7, 3.2, 0, 3.5, -129, 0, 5);
-  colliders.push(boxCol(0, -129, 289.4, 3.6));
+  colliders.push(boxCol(0, -129, 289.4, 3.6, undefined, 7));
 
   // Victorian street lamps
   const postG = lathe([[1.05, 0], [1.05, 0.5], [0.7, 0.9], [0.5, 2.4], [0.64, 2.7], [0.34, 3.2], [0.24, 11.2], [0.55, 11.6], [0.78, 12.1]], 8);
@@ -155,11 +155,15 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   };
   car(-48, 84.6, 0xe9e6dd); car(60, 84.6, 0x8e1f25); car(30, 99.4, 0x1f3f6b);
 
-  // distant city blocks across the road
+  // distant city blocks across the road (solid: collide + standable roofs)
   const r = rng(42);
+  const roofs: [number, number, number, number, number][] = [];
   for (let x = -190; x <= 190; x += 38) {
     const h = 26 + r() * 40;
-    P.box(facadeM, 30 + r() * 6, h, 22, x + r() * 6, h / 2, 136 + r() * 8, 0, 14);
+    const bw = 30 + r() * 6, bx = x + r() * 6, bz = 136 + r() * 8;
+    P.box(facadeM, bw, h, 22, bx, h / 2, bz, 0, 14);
+    colliders.push(boxCol(bx, bz, bw, 22, undefined, h));
+    roofs.push([bx - bw / 2, bx + bw / 2, bz - 11, bz + 11, h]);
   }
 
   /* ---------- trees ---------- */
@@ -196,7 +200,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
         P.add(leafM[i % 3], blobs[i % 3], Math.cos(a) * d, (13 + r() * 4.5 + (i === 0 ? 3 : 0)) * s, Math.sin(a) * d, [r() * 3, r() * 3, 0], [sc, sc * 0.82, sc]);
       }
     });
-    if (solid) colliders.push(circleCol(x, z, 1.5 * s));
+    if (solid) colliders.push(circleCol(x, z, 1.5 * s, 24 * s));
   };
   const placed: [number, number][] = [];
   for (let i = 0; i < 900 && placed.length < (mobile ? 34 : 50); i++) {
@@ -443,6 +447,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
 
   return {
     lamps,
+    roofs,
     waterMat,
     lampMaterial: lampGlass,
     waterfallMat,

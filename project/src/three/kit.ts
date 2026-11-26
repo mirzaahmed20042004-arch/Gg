@@ -3,8 +3,8 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 /* ---------- shared world types ---------- */
 export type Collider =
-  | { kind: "box"; minX: number; maxX: number; minZ: number; maxZ: number; active?: () => boolean }
-  | { kind: "circle"; x: number; z: number; r: number };
+  | { kind: "box"; minX: number; maxX: number; minZ: number; maxZ: number; active?: () => boolean; top?: number }
+  | { kind: "circle"; x: number; z: number; r: number; top?: number };
 
 export interface Seat {
   x: number;
@@ -15,15 +15,16 @@ export interface Seat {
   yaw: number;
 }
 
-export const boxCol = (x: number, z: number, w: number, d: number, active?: () => boolean): Collider => ({
+export const boxCol = (x: number, z: number, w: number, d: number, active?: () => boolean, top?: number): Collider => ({
   kind: "box",
   minX: x - w / 2,
   maxX: x + w / 2,
   minZ: z - d / 2,
   maxZ: z + d / 2,
   active,
+  top,
 });
-export const circleCol = (x: number, z: number, r: number): Collider => ({ kind: "circle", x, z, r });
+export const circleCol = (x: number, z: number, r: number, top?: number): Collider => ({ kind: "circle", x, z, r, top });
 
 /** Deterministic random generator. */
 export function rng(seed: number) {

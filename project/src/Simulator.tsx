@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Armchair, ArrowBigUp, ArrowDown, ArrowUp, ChevronsDown, ChevronsUp, DoorClosed, DoorOpen, Expand, Footprints, Hand, Loader2, Moon, PersonStanding, Plane, Sun, Zap } from "lucide-react";
+import { Armchair, ArrowBigUp, ArrowDown, ArrowUp, DoorClosed, DoorOpen, Expand, Loader2, Moon, PersonStanding, Plane, Sun } from "lucide-react";
 import { createSimulator, type Action, type SimApi, type SimState } from "./three/simulator";
 import { cn } from "./utils/cn";
 
@@ -187,13 +187,13 @@ export default function Simulator() {
       <div className="absolute bottom-[max(env(safe-area-inset-bottom),20px)] right-4 z-20 flex max-w-[min(54vw,270px)] flex-wrap justify-end gap-2 md:right-8 md:gap-3">
         {!state.jet ? (
           <>
-            <Btn label="Clap" onPress={() => act("clap")}><Hand className="h-5 w-5" /></Btn>
-            <Btn label="Kick" onPress={() => act("kick")}><Footprints className="h-5 w-5" /></Btn>
-            <Btn label="Punch" onPress={() => act("punch")}><Zap className="h-5 w-5" /></Btn>
-            <Btn label={state.crouching ? "Stand" : "Crouch"} active={state.crouching} onPress={() => act("crouch")}>
-              {state.crouching ? <ChevronsUp className="h-5 w-5" /> : <ChevronsDown className="h-5 w-5" />}
-            </Btn>
-            <Btn label="Jump" wide onPress={() => act("jump")}><ArrowBigUp className="h-6 w-6" /></Btn>
+            <button
+              aria-label="Jump"
+              onPointerDown={(e) => { e.preventDefault(); act("jump"); }}
+              className="flex h-[56px] w-[56px] items-center justify-center rounded-2xl border border-white/20 bg-black/30 text-white shadow-[0_10px_28px_rgba(0,0,0,0.35)] backdrop-blur-md transition-transform active:scale-90 md:h-[64px] md:w-[64px]"
+            >
+              <ArrowBigUp className="h-8 w-8" />
+            </button>
             <Btn label="Jet On" wide onPress={() => apiRef.current?.toggleJet()}><Plane className="h-5 w-5" /></Btn>
           </>
         ) : (

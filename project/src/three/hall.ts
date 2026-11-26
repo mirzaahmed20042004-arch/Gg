@@ -268,7 +268,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   B.add(stone, archWall(20, 36, 2, [{ x: 0, w: 9, spring: 9, apex: 13.5 }], T), 0, 0, -55);
   B.box(stone, 112, 36, 2, 0, 18, -101, 0, T);
   for (const s of [-1, 1]) B.box(stone, 2, 36, 48, s * 57, 18, -78, 0, T);
-  colliders.push(boxCol(-31.25, -55, 53.5, 2.8), boxCol(31.25, -55, 53.5, 2.8), boxCol(0, -101, 116, 2.8), boxCol(-57, -78, 2.8, 48), boxCol(57, -78, 2.8, 48));
+  colliders.push(boxCol(-31.25, -55, 53.5, 2.8, undefined, 52), boxCol(31.25, -55, 53.5, 2.8, undefined, 52), boxCol(0, -101, 116, 2.8, undefined, 52), boxCol(-57, -78, 2.8, 48, undefined, 52), boxCol(57, -78, 2.8, 48, undefined, 52));
 
   // plinth, string courses, parapet
   for (const [w, d, x, z] of [[118, 3.2, 0, -101.4], [3.2, 50, -57.4, -78], [3.2, 50, 57.4, -78], [47, 3.2, -34.5, -54.6], [47, 3.2, 34.5, -54.6]]) {
@@ -409,7 +409,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   I.box(std(0xe9dfc8, 0.95), 112, 1.5, 44, 0, 18.75, -78);
   I.add(new THREE.MeshBasicMaterial({ map: muralTex(), toneMapped: false, color: 0xd8d8d8 }), new THREE.PlaneGeometry(46, 23), 0, 17.94, -78, [Math.PI / 2, 0, 0]);
   for (let x = -48; x <= 48; x += 16) I.box(darkWood, 1.2, 1, 44, x, 17.6, -78);
-  win(I, new THREE.MeshBasicMaterial({ map: signTex("LIAQUAT NATIONAL LIBRARY", "70,000 VOLUMES  ·  FRERE HALL"), toneMapped: false }), 30, 4.7, 0, 15, -99.9, 0);
+  win(I, new THREE.MeshBasicMaterial({ map: signTex("LIAQUAT NATIONAL LIBRARY", "70,000 VOLUMES  ·  FRERE HALL"), toneMapped: false }), 30, 4.7, 0, 15, -99.6, 0);
   for (const x of [-42, -30, -18, 18, 30, 42]) win(I, winInt, 6.2, 11.5, x, 8.6, -55.94, Math.PI);
   for (const z of [-60, -68, -76, -84, -92]) for (const s of [-1, 1]) win(I, winInt, 5.6, 11.5, s * 55.94, 8.6, z, (-s * Math.PI) / 2);
 
@@ -527,6 +527,8 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
       heights.push([cx - w, cx + w, -27 - (i + 1) * STEP_D, -27 - i * STEP_D, ((i + 1) * 1.86) / 6]);
     }
   }
+  // Roof slope (ridge along x at z=-78): stepped heights so the character can stand on it.
+  heights.push([-60, 60, -85, -71, 51.7], [-60, 60, -98, -85, 47], [-60, 60, -71, -58, 47], [-60, 60, -105, -98, 41], [-60, 60, -58, -51, 41]);
   return {
     door,
     heights,

@@ -308,17 +308,6 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   asphalt.normalScale.set(0.16, 0.16);
   asphalt.roughness = 0.9;
   const white = std(0xe9e5d8, 0.85);
-  // Real concrete footpath (median) with subtle paving joints.
-  const medianM = mapped(
-    tex(256, 256, (c, w, h) => {
-      speckle(c, w, h, "#b5b0a4", ["#a39d90", "#c7c2b6", "#8f8a7e"], 3600, 5, 9);
-      c.strokeStyle = "rgba(70,66,58,0.45)";
-      c.lineWidth = 3;
-      for (let y = 0; y < h; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
-      for (let x = 0; x < w; x += 64) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
-    }),
-    0.92
-  );
   const signalMetal = std(0x20272b, 0.48, { metalness: 0.65 });
   const signTex = tex(256, 256, (c, w, h) => {
     c.clearRect(0, 0, w, h);
@@ -335,16 +324,13 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     c.font = "900 54px Arial, sans-serif"; c.fillText("STOP", w / 2, h / 2, w - 60);
   }, false);
   const stopFace = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.65, side: THREE.DoubleSide });
+  // Street lights live only at Frere Hall (park lamps); the open world has none.
   const streetLights: { x: number; z: number; y: number }[] = [];
-  const streetPole = new THREE.CylinderGeometry(0.13, 0.2, 8.6, 10);
-  const streetGlow = new THREE.MeshStandardMaterial({
-    color: 0xffedc8, emissive: 0xffd68a, emissiveIntensity: 0.035, roughness: 0.38,
-  });
 
   // ground plane for the whole world
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(10000, 10000), grass);
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.02;
+  ground.position.y = -0.08;
   ground.receiveShadow = true;
   (ground.material as THREE.MeshStandardMaterial).map!.repeat.set(700, 700);
   scene.add(ground);
@@ -353,7 +339,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const road = (x1: number, z1: number, x2: number, z2: number) => {
     const w = x2 - x1, d = z2 - z1;
     if (w <= 0 || d <= 0) return;
-    B.box(asphalt, w, 0.14, d, (x1 + x2) / 2, 0.08, (z1 + z2) / 2, 0, 12);
+    B.box(asphalt, w, 0.14, d, (x1 + x2) / 2, 0.12, (z1 + z2) / 2, 0, 12);
   };
 
   // road grid (skipping the park)
@@ -380,39 +366,16 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   // lane dashes (broken centre lines stay on the roads that remain)
   const dashG = new THREE.BoxGeometry(4.2, 0.03, 0.75);
   const dashes: WorldInstance[] = [];
-  const medians: WorldInstance[] = [];
   const m4 = new THREE.Matrix4();
+  // Broken centre lines run down the middle of every road (no medians anywhere).
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi];
     const width = halfZ[zi];
     const horizontalCuts: Array<[number, number]> = hx.map((crossX, i) => [crossX - (halfX[i] / 2 + width / 2 + 3), crossX + (halfX[i] / 2 + width / 2 + 3)]);
     for (const c of CUT) if (z >= c.z1 - width / 2 && z <= c.z2 + width / 2) horizontalCuts.push([c.x1, c.x2]);
-    const dashOffset = width === 46 ? 12.4 : width === 32 ? 8.55 : 0;
     for (const [runStart, runEnd] of freeRuns(-EDGE, EDGE, horizontalCuts)) {
       for (let x = runStart; x < runEnd; x += 15) {
-        if (width >= 32) {
-          for (const side of [-1, 1]) dashes.push({ matrix: m4.clone().makeTranslation(x, 0.17, z + side * dashOffset) });
-        } else dashes.push({ matrix: m4.clone().makeTranslation(x, 0.17, z) });
-      }
-    }
-    if (width === 32) {
-      // Wider breaks at zebra junctions (i % 4) so the footpath never crosses the crossing.
-      const cuts: Array<[number, number]> = hx.map((x, i) => [x - (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4)), x + (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4))]);
-      for (const c of CUT) if (z >= c.z1 - width / 2 && z <= c.z2 + width / 2) cuts.push([c.x1 - width, c.x2 + width]);
-      for (const [a, b] of freeRuns(-EDGE, EDGE, cuts)) {
-        const length = b - a;
-        if (length < 12) continue;
-        medians.push({ matrix: m4.clone().makeTranslation((a + b) / 2, 0.18, z).multiply(new THREE.Matrix4().makeScale(length, 1, 1.6)) });
-        colliders.push(boxCol((a + b) / 2, z, length, 1.65));
-      }
-    } else if (width === 46) {
-      const cuts: Array<[number, number]> = hx.map((x, i) => [x - (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.8)), x + (halfX[i] / 2 + (i % 4 === 0 ? 8.5 : 1.8))]);
-      for (const c of CUT) if (z >= c.z1 - width / 2 && z <= c.z2 + width / 2) cuts.push([c.x1 - width, c.x2 + width]);
-      for (const [a, b] of freeRuns(-EDGE, EDGE, cuts)) {
-        const length = b - a;
-        if (length < 12) continue;
-        medians.push({ matrix: m4.clone().makeTranslation((a + b) / 2, 0.18, z).multiply(new THREE.Matrix4().makeScale(length, 1, 2.0)) });
-        colliders.push(boxCol((a + b) / 2, z, length, 2.05));
+        dashes.push({ matrix: m4.clone().makeTranslation(x, 0.17, z) });
       }
     }
   }
@@ -421,28 +384,13 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     const width = halfX[xi];
     const verticalCuts: Array<[number, number]> = hz.map((crossZ, i) => [crossZ - (halfZ[i] / 2 + width / 2 + 3), crossZ + (halfZ[i] / 2 + width / 2 + 3)]);
     for (const c of CUT) if (x >= c.x1 - width / 2 && x <= c.x2 + width / 2) verticalCuts.push([c.z1, c.z2]);
-    const dashOffset = width === 46 ? 12.4 : width === 32 ? 8.55 : 0;
     for (const [runStart, runEnd] of freeRuns(-EDGE, EDGE, verticalCuts)) {
       for (let z = runStart; z < runEnd; z += 15) {
-        if (width >= 32) {
-          for (const side of [-1, 1]) dashes.push({ matrix: m4.clone().makeTranslation(x + side * dashOffset, 0.17, z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)) });
-        } else dashes.push({ matrix: m4.clone().makeTranslation(x, 0.17, z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)) });
-      }
-    }
-    if (width >= 32) {
-      const cuts: Array<[number, number]> = hz.map((z, i) => [z - (halfZ[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4)), z + (halfZ[i] / 2 + (i % 4 === 0 ? 8.5 : 1.4))]);
-      for (const c of CUT) if (x >= c.x1 - width / 2 && x <= c.x2 + width / 2) cuts.push([c.z1 - width, c.z2 + width]);
-      for (const [a, b] of freeRuns(-EDGE, EDGE, cuts)) {
-        const length = b - a;
-        if (length < 12) continue;
-        const medianWidth = width === 46 ? 2.0 : 1.6;
-        medians.push({ matrix: m4.clone().makeTranslation(x, 0.18, (a + b) / 2).multiply(new THREE.Matrix4().makeScale(medianWidth, 1, length)) });
-        colliders.push(boxCol(x, (a + b) / 2, medianWidth + 0.05, length));
+        dashes.push({ matrix: m4.clone().makeTranslation(x, 0.17, z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)) });
       }
     }
   }
   addWorldInstances(scene, dashG, white, dashes, 800, false, false);
-  addWorldInstances(scene, new THREE.BoxGeometry(1, 0.34, 1), medianM, medians, 800, false, true);
 
   // Zebra crossings sit only at connected junctions, never drift onto the grass.
   const crossingRecords: WorldInstance[] = [];
@@ -459,40 +407,20 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       const x = hx[xi], z = hz[zi], widthX = halfX[xi], widthZ = halfZ[zi];
       if (blocked(x - widthX / 2, x + widthX / 2, z - widthZ / 2, z + widthZ / 2)) continue;
       // Four approaches: five broad bars across each carriageway.
-      // On divided roads the bars split around the footpath so the median never crosses the crossing.
-      const medW = (w: number) => (w === 46 ? 2.0 : w === 32 ? 1.6 : 0);
+      // Four approaches: five broad bars across each carriageway (no medians, full width).
       for (const side of [-1, 1]) {
         for (let n = 0; n < 5; n++) {
           const alongX = x + side * (widthX / 2 + 3.2 + n * 0.92);
           const alongZ = z + side * (widthZ / 2 + 3.2 + n * 0.92);
-          const mZ = medW(widthZ), mX = medW(widthX);
-          if (mZ > 0) {
-            const half = widthZ / 2 - 1, gap = mZ / 2 + 0.35;
-            const segLen = half - gap;
-            for (const s2 of [-1, 1]) {
-              crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.176, z + s2 * (gap + segLen / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, segLen)) });
-            }
-          } else {
-            crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.176, z).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthZ - 2))) });
-          }
-          if (mX > 0) {
-            const half = widthX / 2 - 1, gap = mX / 2 + 0.35;
-            const segLen = half - gap;
-            for (const s2 of [-1, 1]) {
-              crossingRecords.push({ matrix: m4.clone().makeTranslation(x + s2 * (gap + segLen / 2), 0.176, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, segLen)) });
-            }
-          } else {
-            crossingRecords.push({ matrix: m4.clone().makeTranslation(x, 0.176, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthX - 2))) });
-          }
+          crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.176, z).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthZ - 2))) });
+          crossingRecords.push({ matrix: m4.clone().makeTranslation(x, 0.176, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthX - 2))) });
         }
       }
-      // Separate through and left-turn lane arrows on divided approaches.
-      const medX = widthX === 46 ? 2.0 : 1.6;
-      const medZ = widthZ === 46 ? 2.0 : 1.6;
-      const innerX = medX / 2 + (widthX - medX) / 8;
-      const outerX = medX / 2 + 3 * (widthX - medX) / 8;
-      const innerZ = medZ / 2 + (widthZ - medZ) / 8;
-      const outerZ = medZ / 2 + 3 * (widthZ - medZ) / 8;
+      // Separate through and left-turn lane arrows (centred lanes, no median).
+      const innerX = widthX / 8;
+      const outerX = (3 * widthX) / 8;
+      const innerZ = widthZ / 8;
+      const outerZ = (3 * widthZ) / 8;
       const arrowMarks: [number, number, number][] = [
         [x + outerX, z - widthZ / 2 - 15, 0],
         [x + innerX, z - widthZ / 2 - 15, -Math.PI / 2],
@@ -512,23 +440,12 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const drainMat = std(0x3c4142, 0.78, { metalness: 0.22 });
   const drainForHorizontal = (x: number, z: number) => B.box(drainMat, 1.35, 0.045, 0.56, x, 0.185, z);
   const drainForVertical = (x: number, z: number) => B.box(drainMat, 0.56, 0.045, 1.35, x, 0.185, z);
-  // Street lights on every road, alternating sides, arms reaching over the carriageway.
+  // Curb drains repeat along roads (street lights live only at Frere Hall).
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi], width = halfZ[zi];
     for (let side of [-1, 1]) {
       const curbZ = z + side * (width / 2 - 0.5);
       for (let x = -EDGE + 90; x < EDGE; x += 120) if (!blocked(x - 1, x + 1, curbZ - 1, curbZ + 1)) drainForHorizontal(x, curbZ);
-    }
-    for (let x = -EDGE + 140, n = 0; x < EDGE; x += 160, n++) {
-      const side = n % 2 === 0 ? -1 : 1;
-      const poleX = x, poleZ = z + side * (width / 2 + 5);
-      if (blocked(poleX - 2, poleX + 2, poleZ - 2, poleZ + 2)) continue;
-      B.add(signalMetal, streetPole, poleX, 4.3, poleZ);
-      B.box(signalMetal, 0.18, 0.18, 6, poleX, 8.45, poleZ - side * 2.75);
-      const headZ = poleZ - side * 5.5;
-      B.box(streetGlow, 1.25, 0.24, 0.72, poleX, 8.3, headZ);
-      streetLights.push({ x: poleX, z: headZ, y: 8.3 });
-      colliders.push(circleCol(poleX, poleZ, 0.5));
     }
   }
   for (let xi = 0; xi < hx.length; xi++) {
@@ -536,17 +453,6 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     for (const side of [-1, 1]) {
       const curbX = x + side * (width / 2 - 0.5);
       for (let z = -EDGE + 90; z < EDGE; z += 120) if (!blocked(curbX - 1, curbX + 1, z - 1, z + 1)) drainForVertical(curbX, z);
-    }
-    for (let z = -EDGE + 140, n = 0; z < EDGE; z += 160, n++) {
-      const side = n % 2 === 0 ? -1 : 1;
-      const poleX = x + side * (width / 2 + 5), poleZ = z;
-      if (blocked(poleX - 2, poleX + 2, poleZ - 2, poleZ + 2)) continue;
-      B.add(signalMetal, streetPole, poleX, 4.3, poleZ);
-      B.box(signalMetal, 6, 0.18, 0.18, poleX - side * 2.75, 8.45, poleZ);
-      const headX = poleX - side * 5.5;
-      B.box(streetGlow, 0.72, 0.24, 1.25, headX, 8.3, poleZ);
-      streetLights.push({ x: headX, z: poleZ, y: 8.3 });
-      colliders.push(circleCol(poleX, poleZ, 0.5));
     }
   }
 
@@ -604,13 +510,18 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
         const px = x + sx * (wx / 2 + 1.75);
         const pz = z + sz * (wz / 2 + 1.75);
         B.add(signalMetal, poleGeometry, px, 3.15, pz);
-        B.box(signalMetal, 0.94, 2.25, 0.72, px, 6.4, pz);
-        B.box(signalMetal, 1.12, 0.16, 0.9, px, 7.57, pz);
+        B.box(signalMetal, 1.05, 2.6, 0.8, px, 6.4, pz);
+        B.box(signalMetal, 1.25, 0.16, 1.0, px, 7.78, pz);
         const first = bulbMatrices.length;
         const axis: 0 | 1 = sx === sz ? 0 : 1;
         const offset = (xi * 17 + zi * 29) % 9;
-        const lampZ = pz + (sz < 0 ? 0.38 : -0.38);
-        for (let n = 0; n < 3; n++) bulbMatrices.push(m4.clone().makeTranslation(px, 7.05 - n * 0.62, lampZ).multiply(new THREE.Matrix4().makeScale(0.82, 0.82, 0.82)));
+        const lampZ = pz + (sz < 0 ? 0.42 : -0.42);
+        for (let n = 0; n < 3; n++) {
+          const by = 7.15 - n * 0.72;
+          bulbMatrices.push(m4.clone().makeTranslation(px, by, lampZ).multiply(new THREE.Matrix4().makeScale(1.05, 1.05, 1.05)));
+          // Visor hood over each lens (real signal look).
+          B.box(signalMetal, 0.62, 0.08, 0.55, px, by + 0.26, lampZ + (sz < 0 ? 0.18 : -0.18));
+        }
         signalGroups.push({ first, axis, offset });
         // Countdown timer display below the head, facing traffic.
         const tKey = `${offset}:${axis}`;
@@ -713,11 +624,11 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
         const laneZ = Math.max(4.5, Math.min(6.5, gapZ - 2.2));
         for (let i = 1; i < cols; i++) {
           const x = left + gapX + i * plotW + (i - 0.5) * gapX;
-          B.box(asphalt, laneX, 0.14, cellD, x, 0.08, near + cellD / 2, 0, 12);
+          B.box(asphalt, laneX, 0.14, cellD, x, 0.12, near + cellD / 2, 0, 12);
         }
         for (let j = 1; j < rows; j++) {
           const z = near + gapZ + j * plotD + (j - 0.5) * gapZ;
-          B.box(asphalt, cellW, 0.14, laneZ, left + cellW / 2, 0.08, z, 0, 12);
+          B.box(asphalt, cellW, 0.14, laneZ, left + cellW / 2, 0.12, z, 0, 12);
         }
       }
       for (let i = 0; i < cols; i++) {
@@ -726,7 +637,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
           const z = near + gapZ + plotD / 2 + j * (plotD + gapZ);
           if (blocked(x - plotW / 2, x + plotW / 2, z - plotD / 2, z + plotD / 2)) continue;
           plots.push({
-            matrix: m4.clone().makeTranslation(x, 0.035, z)
+            matrix: m4.clone().makeTranslation(x, 0.06, z)
               .multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2))
               .multiply(new THREE.Matrix4().makeScale(plotW / 52, plotD / 52, 1)),
             color: col.setHex(tones[Math.floor(r() * tones.length)]).clone(),
@@ -756,7 +667,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     const s = 0.85 + r() * 0.6;
     m4.compose(new THREE.Vector3(x, 4.5 * s, z), new THREE.Quaternion(), new THREE.Vector3(s, s, s));
     trunkInstances.push({ matrix: m4.clone() });
-    colliders.push(circleCol(x, z, 1.35 * s));
+    colliders.push(circleCol(x, z, 1.35 * s, 22 * s));
     for (let k = 0; k < 2; k++) {
       m4.compose(new THREE.Vector3(x + (r() - 0.5) * 2 * s, (10.5 + k * 3.4) * s, z + (r() - 0.5) * 2 * s), new THREE.Quaternion().setFromAxisAngle(up, r() * 6.28), new THREE.Vector3(4.6 * s, 3.5 * s, 4.6 * s));
       crownInstances.push({ matrix: m4.clone() });
@@ -773,18 +684,16 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   B.box(wallM, 3, 13, W * 2, -W, 6.5, 0, 0, 10);
   B.box(wallM, 3, 13, W * 2, W, 6.5, 0, 0, 10);
   for (const s of [-1, 1]) {
-    colliders.push(boxCol(0, s * W, W * 2, 4));
-    colliders.push(boxCol(s * W, 0, 4, W * 2));
+    colliders.push(boxCol(0, s * W, W * 2, 4, undefined, 13));
+    colliders.push(boxCol(s * W, 0, 4, W * 2, undefined, 13));
   }
   B.build(scene, true, true);
   updateSignals(0);
   return {
     grass,
     streetLights,
-    update(time: number, day: number) {
+    update(time: number) {
       updateSignals(time);
-      // Street lights: fully off in daylight, bright at night (auto by day factor).
-      streetGlow.emissiveIntensity = (1 - day) * 3.6;
     },
   };
 }
