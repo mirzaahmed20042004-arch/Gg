@@ -1,25 +1,33 @@
 import * as THREE from "three";
 import { Batch, tex, speckle, lathe, prism, tilePlane, std, mapped, boxCol, circleCol, rng, type Collider, type Seat } from "./kit";
+import { PARK_BOUNDS } from "./world";
 
 /** Is this point on a paved / built surface (so no grass or trees grow there)? */
 export function paved(x: number, z: number, m = 0) {
   const ax = Math.abs(x);
-  if (ax < 64 + m && z > -106 - m && z < -36 + m) return true; // hall footprint
-  if (ax < 40 + m && z > -54 && z < 0 + m) return true; // forecourt
-  if (ax < 10 + m && z > -1 && z < 70) return true; // main path
+  if (ax < 88 + m && z > -120 - m && z < -30 + m) return true; // Frere Hall terrace footprint
+  if (ax < 40 + m && z > -56.5 - m && z < 1.5 + m) return true; // forecourt
+  if (ax < 10 + m && z > -1 - m && z < 70 + m) return true; // main path
   if (Math.hypot(x, z - 30) < 18 + m) return true; // fountain plaza
   if (ax < 122 + m && Math.abs(z - 30) < 5 + m) return true; // cross path
-  return z > 68 - m; // pavement + road
+  return z > 68 - m; // front promenade + perimeter road
 }
 
 export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat[], mobile: boolean) {
+  const PW = PARK_BOUNDS.maxX - PARK_BOUNDS.minX;
+  const PD = PARK_BOUNDS.maxZ - PARK_BOUNDS.minZ;
+  const PCX = (PARK_BOUNDS.minX + PARK_BOUNDS.maxX) / 2;
+  const PCZ = (PARK_BOUNDS.minZ + PARK_BOUNDS.maxZ) / 2;
+
   /* ---------- materials ---------- */
+  const lawnM = mapped(tex(512, 512, (c, w, h) => {
+    speckle(c, w, h, "#478035", ["#3c712c", "#548f3e", "#356627", "#619c48", "#4d8739"], 14000, 4, 3);
+  }), 0.97);
   const paverM = mapped(tex(256, 256, (c, w, h) => {
     speckle(c, w, h, "#b9ab90", ["#a39478", "#cfc3aa", "#8f8168"], 2600, 6, 6);
     c.strokeStyle = "rgba(80,68,48,0.5)"; c.lineWidth = 2;
     for (let y = 0; y < h; y += 64) for (let x = (y / 64) % 2 ? -64 : 0; x < w; x += 128) c.strokeRect(x, y, 128, 64);
   }), 0.95);
-  const asphaltM = mapped(tex(256, 256, (c, w, h) => speckle(c, w, h, "#3b3d41", ["#2c2e31", "#4c4f54", "#5a5d62"], 5200, 3, 8)), 0.95);
   const barkM = mapped(tex(128, 256, (c, w, h) => {
     speckle(c, w, h, "#5b4330", ["#3e2c1e", "#75593f", "#2f2116"], 900, 4, 12);
     const r = rng(3);
@@ -30,41 +38,52 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   const stoneM = std(0xc9bfa6, 0.9);
   const iron = std(0x1f2428, 0.55, { metalness: 0.6 });
   const woodM = std(0x7a5230, 0.75);
-  const white = std(0xf1efe6, 0.8);
+  const white = std(0xf7f5ed, 0.74);
   const lampGlass = new THREE.MeshStandardMaterial({ color: 0xfff1cf, emissive: 0xffd98a, emissiveIntensity: 0.9, roughness: 0.3 });
   const rubber = std(0x17181a, 0.9);
   const glass = std(0x1b2a33, 0.15, { metalness: 0.5 });
 
-  /* ---------- ground surfaces ---------- */
+  /* ---------- continuous rectangular green grass park + stone pathways ---------- */
   const G = new Batch();
   const flat = (m: THREE.Material, w: number, d: number, x: number, z: number, y: number, tile: number) =>
     G.add(m, tilePlane(w, d, tile), x, y, z, [-Math.PI / 2, 0, 0]);
+  // One seamless rectangular lawn extending across front, back, left & right right up to all 4 perimeter roads.
+  flat(lawnM, PW, PD, PCX, PCZ, 0.02, 16);
   const F = 0.13;
   flat(paverM, 80, 58, 0, -27.5, 0.04 + F, 9);
   flat(paverM, 20, 70, 0, 35, 0.04 + F, 9);
   flat(paverM, 244, 10, 0, 30, 0.035 + F, 9);
   G.add(paverM, new THREE.CircleGeometry(18, 40), 0, 0.05 + F, 30, [-Math.PI / 2, 0, 0], [1, 1, 1]);
-  flat(paverM, 460, 16, 0, 75, 0.045 + F, 9);
-  flat(asphaltM, 520, 24, 0, 92, 0.03 + F, 10);
-  flat(paverM, 460, 9, 0, 109.5, 0.045 + F, 9);
-  for (const z of [80.2, 103.8]) flat(white, 460, 0.45, 0, z, 0.05 + F, 1);
-  for (let x = -222; x < 224; x += 13) if (Math.abs(x) > 12) flat(white, 6, 0.45, x, 92, 0.05 + F, 1);
-  for (let x = -8; x <= 8; x += 3.2) flat(white, 1.7, 21, x, 92, 0.055 + F, 1);
+  // Front promenade spans the full width of the park and terminates cleanly at the z = 80 perimeter road edge.
+  flat(paverM, PW, 12, PCX, 74, 0.045 + F, 9);
+  for (const z of [80.35, 103.65]) flat(white, PW, 0.42, PCX, z, 0.195, 1);
+  for (let x = -8; x <= 8; x += 3.2) flat(white, 1.7, 21, x, 92, 0.205, 1);
   G.build(scene, false, true);
 
   /* ---------- solid props ---------- */
   const P = new Batch();
   const lampPos: { x: number; y: number; z: number }[] = [];
 
-  // grass walls (hedges) enclose the park on back / right / left, meeting at the corners
+  // Forecourt accent hedges + unbroken perimeter hedge along Back, Left & Right (stopping cleanly at the front promenade).
   for (const s of [-1, 1]) {
-    P.box(hedgeM, 2.4, 3.4, 30, s * 41.5, 1.7, -19, 0, 5);
-    colliders.push(boxCol(s * 41.5, -19, 2.8, 30.4, undefined, 3.4));
-    P.box(hedgeM, 3.2, 7, 262, s * 143, 3.5, -8, 0, 5);
-    colliders.push(boxCol(s * 143, -8, 3.6, 262.4, undefined, 7));
+    P.box(hedgeM, 2.4, 2.8, 30, s * 41.5, 1.4, -19, 0, 5);
+    colliders.push(boxCol(s * 41.5, -19, 2.8, 30.4, undefined, 2.8));
   }
-  P.box(hedgeM, 289, 7, 3.2, 0, 3.5, -129, 0, 5);
-  colliders.push(boxCol(0, -129, 289.4, 3.6, undefined, 7));
+  const hxL = PARK_BOUNDS.minX + 3.8;
+  const hxR = PARK_BOUNDS.maxX - 3.8;
+  const hzB = PARK_BOUNDS.minZ + 3.8;
+  const hzF = 68.0;
+  const hedgeW = 2.6;
+  const hedgeH = 4.2;
+  const sideLen = hzF - hzB + hedgeW;
+  const sideMidZ = (hzB - hedgeW / 2 + hzF + hedgeW / 2) / 2;
+  const backLen = hxR - hxL + hedgeW;
+  P.box(hedgeM, backLen, hedgeH, hedgeW, PCX, hedgeH / 2, hzB, 0, 6);
+  colliders.push(boxCol(PCX, hzB, backLen + 0.4, hedgeW + 0.4, undefined, hedgeH));
+  for (const hxEdge of [hxL, hxR]) {
+    P.box(hedgeM, hedgeW, hedgeH, sideLen, hxEdge, hedgeH / 2, sideMidZ, 0, 6);
+    colliders.push(boxCol(hxEdge, sideMidZ, hedgeW + 0.4, sideLen + 0.4, undefined, hedgeH));
+  }
 
   // Victorian street lamps
   const postG = lathe([[1.05, 0], [1.05, 0.5], [0.7, 0.9], [0.5, 2.4], [0.64, 2.7], [0.34, 3.2], [0.24, 11.2], [0.55, 11.6], [0.78, 12.1]], 8);
@@ -137,7 +156,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
       g.translate(0, 0, -d / 2);
       return g;
     };
-    P.at(x, 0, z, 0, () => {
+    P.at(x, 0.17, z, 0, () => {
       P.add(paint, ext(body, 6));
       P.add(glass, ext(cabin, 5.2));
       P.box(paint, 5.3, 0.3, 5.5, 1, 5.3, 0);
@@ -147,7 +166,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
       }
       for (const sz of [-2.2, 2.2]) { P.box(white, 0.2, 0.5, 1.1, -7.75, 2.3, sz); P.box(std(0xb3261e, 0.5), 0.2, 0.5, 1.1, 7.95, 2.3, sz); }
     });
-    colliders.push(boxCol(x, z, 16.4, 6.8));
+    colliders.push(boxCol(x, z, 16.4, 6.8, undefined, 5.6));
   };
   car(-48, 84.6, 0xe9e6dd); car(60, 84.6, 0x8e1f25); car(30, 99.4, 0x1f3f6b);
 
@@ -198,14 +217,52 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     placed.push([x, z]);
     tree(x, z, 0.85 + r() * 0.5, true);
   }
-  for (let i = 0; i < 22; i++) { const a = (i / 22) * Math.PI * 1.5 + Math.PI * 0.75; tree(Math.cos(a) * 168, -10 + Math.sin(a) * 150, 1.5 + r() * 0.5, false); }
-  // corner trees just inside the grass walls (back / right / left)
-  for (const s of [-1, 1]) {
-    tree(s * 134, -120, 1.35, true);
-    tree(s * 134, -70, 1.15, true);
-    tree(s * 134, -20, 1.2, true);
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 1.5 + Math.PI * 0.75;
+    const tx = Math.cos(a) * 168;
+    const tz = -10 + Math.sin(a) * 150;
+    const ts = 1.35 + r() * 0.45;
+    if (tz > 58 || paved(tx, tz, 7) || placed.some(([px, pz]) => Math.hypot(px - tx, pz - tz) < 16)) continue;
+    placed.push([tx, tz]);
+    tree(tx, tz, ts, true);
   }
-  tree(-70, -120, 1.25, true); tree(0, -120, 1.4, true); tree(70, -120, 1.25, true);
+  for (const s of [-1, 1]) {
+    for (const tz of [-120, -70, -20]) {
+      placed.push([s * 134, tz]);
+      tree(s * 134, tz, 1.2, true);
+    }
+  }
+  for (const [tx, ts] of [[-70, 1.25], [0, 1.4], [70, 1.25]] as const) {
+    placed.push([tx, -132]);
+    tree(tx, -132, ts, true);
+  }
+
+  // Landscaped Bagh-e-Jinnah perimeter shade trees & outer lawn groves across the full rectangular park.
+  const rOuter = rng(9042);
+  for (let x = hxL + 18; x <= hxR - 18; x += 56) {
+    const tx = x + (rOuter() - 0.5) * 8;
+    const tz = hzB + 15 + rOuter() * 5;
+    placed.push([tx, tz]);
+    tree(tx, tz, 1.15 + rOuter() * 0.4, true);
+  }
+  for (const hxEdge of [hxL + 15, hxR - 15]) {
+    for (let z = hzB + 64; z <= 52; z += 56) {
+      const tx = hxEdge + (rOuter() - 0.5) * 5;
+      const tz = z + (rOuter() - 0.5) * 8;
+      if (paved(tx, tz, 7)) continue;
+      placed.push([tx, tz]);
+      tree(tx, tz, 1.15 + rOuter() * 0.4, true);
+    }
+  }
+  const targetOuter = placed.length + (mobile ? 48 : 85);
+  for (let i = 0; i < 1600 && placed.length < targetOuter; i++) {
+    const tx = hxL + 24 + rOuter() * (hxR - hxL - 48);
+    const tz = hzB + 24 + rOuter() * (56 - (hzB + 24));
+    if (Math.abs(tx) < 162 && tz > -138) continue; // preserve Frere Hall inner garden & front vista
+    if (paved(tx, tz, 8) || placed.some(([px, pz]) => Math.hypot(px - tx, pz - tz) < 30)) continue;
+    placed.push([tx, tz]);
+    tree(tx, tz, 0.95 + rOuter() * 0.55, true);
+  }
   P.build(scene);
 
   /* ---------- grass tufts + flowers (instanced) ---------- */
@@ -242,17 +299,26 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   const grassGeo = new THREE.BufferGeometry();
   grassGeo.setAttribute("position", new THREE.Float32BufferAttribute(grassVerts, 3));
   grassGeo.computeVertexNormals();
-  const nGrass = mobile ? 2600 : 6200;
+  const nGrass = mobile ? 3200 : 7600;
   const tufts = new THREE.InstancedMesh(grassGeo, new THREE.MeshStandardMaterial({ roughness: 0.96, side: THREE.DoubleSide }), nGrass);
   for (let i = 0; i < nGrass; i++) {
     let x = 0, z = 0;
-    do { x = (r() * 2 - 1) * 136; z = -124 + r() * 190; } while (paved(x, z, 0.6));
-    dummy.position.set(x, 0.015, z);
+    for (let tries = 0; tries < 20; tries++) {
+      if (i % 3 === 0) {
+        x = (r() * 2 - 1) * 165;
+        z = -145 + r() * 211;
+      } else {
+        x = hxL + 3 + r() * (hxR - hxL - 6);
+        z = hzB + 3 + r() * (66.5 - (hzB + 3));
+      }
+      if (!paved(x, z, 0.7)) break;
+    }
+    dummy.position.set(x, 0.02, z);
     dummy.rotation.set(0, r() * 6.28, 0);
     dummy.scale.setScalar(0.65 + r() * 0.65);
     dummy.updateMatrix();
     tufts.setMatrixAt(i, dummy.matrix);
-    tufts.setColorAt(i, col.setHSL(0.27 + r() * 0.06, 0.5 + r() * 0.2, 0.26 + r() * 0.14));
+    tufts.setColorAt(i, col.setHSL(0.28 + r() * 0.04, 0.44 + r() * 0.16, 0.34 + r() * 0.11));
   }
   tufts.receiveShadow = true;
   tufts.instanceMatrix.needsUpdate = true;

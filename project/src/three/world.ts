@@ -220,15 +220,32 @@ const GRID = 24; // boundary-to-boundary is just under 10 km
 const EDGE = GRID * CELL + 130;
 export const WORLD_LIMIT = EDGE + 23;
 
-/** rectangles the open-world grid must not pave over (the park + its road).
- *  The main rect covers the park plus 2 roads behind / right / left of the hall
- *  (grass instead of road); the front road stays. */
-const CUT = [
-  { x1: -340, x2: 340, z1: -350, z2: 85 },
-  { x1: -260, x2: 260, z1: 85, z2: 99 },
-];
-const blocked = (x1: number, x2: number, z1: number, z2: number) =>
-  CUT.some((c) => x1 < c.x2 && x2 > c.x1 && z1 < c.z2 && z2 > c.z1);
+const lineOffset = (i: number, phase: number) =>
+  i === GRID ? 0 : Math.sin(i * 1.71 + phase) * 10 + Math.sin(i * 0.47 + phase) * 4;
+const hx = Array.from({ length: GRID * 2 + 1 }, (_, i) => 100 + (i - GRID) * CELL + lineOffset(i, 0.4));
+const hz = Array.from({ length: GRID * 2 + 1 }, (_, i) =>
+  i === GRID + 1 ? 92 : -108 + (i - GRID) * CELL + lineOffset(i, 1.9)
+);
+const carriagewayWidth = (index: number) => index % 12 === 0 ? 46 : index % 4 === 0 ? 32 : index % 2 === 0 ? ROAD_W : 14;
+const halfX = hx.map((_, i) => carriagewayWidth(i));
+const halfZ = hz.map((_, i) => (i === GRID + 1 ? 24 : carriagewayWidth(i)));
+
+/** Grid indices of the 4 uninterrupted perimeter roads bounding Frere Hall Park. */
+const PARK_XI_MIN = 21;
+const PARK_XI_MAX = 26;
+const PARK_ZI_MIN = 22;
+const PARK_ZI_MAX = 25;
+
+/** Exact rectangular park bounds ending precisely at the inner edges of the 4 perimeter roads. */
+export const PARK_BOUNDS = {
+  minX: hx[PARK_XI_MIN] + halfX[PARK_XI_MIN] / 2,
+  maxX: hx[PARK_XI_MAX] - halfX[PARK_XI_MAX] / 2,
+  minZ: hz[PARK_ZI_MIN] + halfZ[PARK_ZI_MIN] / 2,
+  maxZ: hz[PARK_ZI_MAX] - halfZ[PARK_ZI_MAX] / 2,
+};
+
+const inParkRect = (x: number, z: number, m = 0) =>
+  x > PARK_BOUNDS.minX - m && x < PARK_BOUNDS.maxX + m && z > PARK_BOUNDS.minZ - m && z < PARK_BOUNDS.maxZ + m;
 
 function freeRuns(start: number, end: number, cuts: Array<[number, number]>) {
   const sorted = cuts.map(([a, b]) => [Math.max(start, a), Math.min(end, b)] as [number, number])
@@ -328,24 +345,21 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     B.box(asphalt, w, 0.14, d, (x1 + x2) / 2, 0.10, (z1 + z2) / 2, 0, 12);
   };
 
-  // road grid (skipping the park)
-  const lineOffset = (i: number, phase: number) => i === GRID ? 0 : Math.sin(i * 1.71 + phase) * 10 + Math.sin(i * 0.47 + phase) * 4;
-  const hx = Array.from({ length: GRID * 2 + 1 }, (_, i) => 100 + (i - GRID) * CELL + lineOffset(i, 0.4));
-  const hz = Array.from({ length: GRID * 2 + 1 }, (_, i) => -108 + (i - GRID) * CELL + lineOffset(i, 1.9));
-  const carriagewayWidth = (index: number) => index % 12 === 0 ? 46 : index % 4 === 0 ? 32 : index % 2 === 0 ? ROAD_W : 14;
-  const halfX = hx.map((_, i) => carriagewayWidth(i));
-  const halfZ = hz.map((_, i) => carriagewayWidth(i));
-
+  // road grid (terminating cleanly at the 4 uninterrupted perimeter roads around Frere Hall Park)
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi];
     const width = halfZ[zi];
-    const cuts = CUT.filter((c) => z + width / 2 > c.z1 && z - width / 2 < c.z2).map((c) => [c.x1, c.x2] as [number, number]);
+    const cuts: Array<[number, number]> = zi > PARK_ZI_MIN && zi < PARK_ZI_MAX
+      ? [[hx[PARK_XI_MIN], hx[PARK_XI_MAX]]]
+      : [];
     for (const [x1, x2] of freeRuns(-EDGE, EDGE, cuts)) road(x1, z - width / 2, x2, z + width / 2);
   }
   for (let xi = 0; xi < hx.length; xi++) {
     const x = hx[xi];
     const width = halfX[xi];
-    const cuts = CUT.filter((c) => x + width / 2 > c.x1 && x - width / 2 < c.x2).map((c) => [c.z1, c.z2] as [number, number]);
+    const cuts: Array<[number, number]> = xi > PARK_XI_MIN && xi < PARK_XI_MAX
+      ? [[hz[PARK_ZI_MIN], hz[PARK_ZI_MAX]]]
+      : [];
     for (const [z1, z2] of freeRuns(-EDGE, EDGE, cuts)) road(x - width / 2, z1, x + width / 2, z2);
   }
 
@@ -357,7 +371,10 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     const z = hz[zi];
     const width = halfZ[zi];
     const horizontalCuts: Array<[number, number]> = hx.map((crossX, i) => [crossX - (halfX[i] / 2 + width / 2 + 3), crossX + (halfX[i] / 2 + width / 2 + 3)]);
-    for (const c of CUT) if (z >= c.z1 - width / 2 && z <= c.z2 + width / 2) horizontalCuts.push([c.x1, c.x2]);
+    if (zi > PARK_ZI_MIN && zi < PARK_ZI_MAX) {
+      horizontalCuts.push([hx[PARK_XI_MIN] - halfX[PARK_XI_MIN] / 2 - 3, hx[PARK_XI_MAX] + halfX[PARK_XI_MAX] / 2 + 3]);
+    }
+    if (zi === PARK_ZI_MAX) horizontalCuts.push([-14, 14]);
     for (const [runStart, runEnd] of freeRuns(-EDGE, EDGE, horizontalCuts)) {
       for (let x = runStart; x < runEnd; x += 15) {
         dashes.push({ matrix: m4.clone().makeTranslation(x, 0.21, z) });
@@ -368,7 +385,9 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     const x = hx[xi];
     const width = halfX[xi];
     const verticalCuts: Array<[number, number]> = hz.map((crossZ, i) => [crossZ - (halfZ[i] / 2 + width / 2 + 3), crossZ + (halfZ[i] / 2 + width / 2 + 3)]);
-    for (const c of CUT) if (x >= c.x1 - width / 2 && x <= c.x2 + width / 2) verticalCuts.push([c.z1, c.z2]);
+    if (xi > PARK_XI_MIN && xi < PARK_XI_MAX) {
+      verticalCuts.push([hz[PARK_ZI_MIN] - halfZ[PARK_ZI_MIN] / 2 - 3, hz[PARK_ZI_MAX] + halfZ[PARK_ZI_MAX] / 2 + 3]);
+    }
     for (const [runStart, runEnd] of freeRuns(-EDGE, EDGE, verticalCuts)) {
       for (let z = runStart; z < runEnd; z += 15) {
         dashes.push({ matrix: m4.clone().makeTranslation(x, 0.21, z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)) });
@@ -389,8 +408,8 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     if (xi % 4 !== 0) continue;
     for (let zi = 0; zi < hz.length; zi++) {
       if (zi % 4 !== 0) continue;
+      if (xi >= PARK_XI_MIN && xi <= PARK_XI_MAX && zi >= PARK_ZI_MIN && zi <= PARK_ZI_MAX) continue;
       const x = hx[xi], z = hz[zi], widthX = halfX[xi], widthZ = halfZ[zi];
-      if (blocked(x - widthX / 2, x + widthX / 2, z - widthZ / 2, z + widthZ / 2)) continue;
       // Four approaches: five broad bars across each carriageway (no medians, full width).
       for (const side of [-1, 1]) {
         for (let n = 0; n < 5; n++) {
@@ -425,16 +444,25 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const drainForVertical = (x: number, z: number) => B.box(drainMat, 0.56, 0.045, 1.35, x, 0.182, z);
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi], width = halfZ[zi];
-    for (let side of [-1, 1]) {
+    const cutRow = zi > PARK_ZI_MIN && zi < PARK_ZI_MAX;
+    for (const side of [-1, 1]) {
       const curbZ = z + side * (width / 2 - 0.5);
-      for (let x = -EDGE + 90; x < EDGE; x += 120) if (!blocked(x - 1, x + 1, curbZ - 1, curbZ + 1)) drainForHorizontal(x, curbZ);
+      for (let x = -EDGE + 90; x < EDGE; x += 120) {
+        if (cutRow && x > hx[PARK_XI_MIN] - 10 && x < hx[PARK_XI_MAX] + 10) continue;
+        if (zi === PARK_ZI_MAX && Math.abs(x) < 16) continue;
+        drainForHorizontal(x, curbZ);
+      }
     }
   }
   for (let xi = 0; xi < hx.length; xi++) {
     const x = hx[xi], width = halfX[xi];
+    const cutCol = xi > PARK_XI_MIN && xi < PARK_XI_MAX;
     for (const side of [-1, 1]) {
       const curbX = x + side * (width / 2 - 0.5);
-      for (let z = -EDGE + 90; z < EDGE; z += 120) if (!blocked(curbX - 1, curbX + 1, z - 1, z + 1)) drainForVertical(curbX, z);
+      for (let z = -EDGE + 90; z < EDGE; z += 120) {
+        if (cutCol && z > hz[PARK_ZI_MIN] - 10 && z < hz[PARK_ZI_MAX] + 10) continue;
+        drainForVertical(curbX, z);
+      }
     }
   }
 
@@ -510,8 +538,9 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
 
   for (let xi = 0; xi < hx.length; xi++) {
     for (let zi = 0; zi < hz.length; zi++) {
+      // Skip only the interior of Frere Hall Park; all perimeter intersections & T-junctions keep 4-corner signals.
+      if (xi > PARK_XI_MIN && xi < PARK_XI_MAX && zi > PARK_ZI_MIN && zi < PARK_ZI_MAX) continue;
       const x = hx[xi], z = hz[zi], wx = halfX[xi], wz = halfZ[zi];
-      if (blocked(x - 1, x + 1, z - 1, z + 1)) continue;
       // Four corners of every road junction, each facing oncoming traffic along its road axis.
       const corners: Array<[number, number, 0 | 1, number]> = [
         [-1, 1, 0, Math.PI],
@@ -521,9 +550,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       ];
       for (const [sx, sz, axis, yaw] of corners) {
         const px = x + sx * (wx / 2 + 1.15);
-        let pz = z + sz * (wz / 2 + 1.15);
-        // Keep north corners on Frere Hall's front road right at the north roadside edge, never inside asphalt.
-        if (Math.abs(px) < 260 && pz > 79.5 && pz < 104.5) pz = 79.0;
+        const pz = z + sz * (wz / 2 + 1.15);
         const baseM = m4.clone().makeTranslation(px, 0, pz).multiply(rotM.makeRotationY(yaw));
         signalBodies.push({ matrix: baseM });
         for (let n = 0; n < 3; n++) {
@@ -589,10 +616,14 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const tones = [0x8a7a4e, 0x9c8a5c, 0x7d7450, 0xa8955f, 0x6f7c48, 0xb0a072];
   for (let kx = -GRID; kx < GRID; kx++) {
     for (let kz = -GRID; kz < GRID; kz++) {
-      const left = hx[kx + GRID] + halfX[kx + GRID] / 2;
-      const right = hx[kx + GRID + 1] - halfX[kx + GRID + 1] / 2;
-      const near = hz[kz + GRID] + halfZ[kz + GRID] / 2;
-      const far = hz[kz + GRID + 1] - halfZ[kz + GRID + 1] / 2;
+      const ix = kx + GRID;
+      const iz = kz + GRID;
+      // Zero empty plots and zero random local lanes inside the rectangular Frere Hall Park.
+      if (ix >= PARK_XI_MIN && ix < PARK_XI_MAX && iz >= PARK_ZI_MIN && iz < PARK_ZI_MAX) continue;
+      const left = hx[ix] + halfX[ix] / 2;
+      const right = hx[ix + 1] - halfX[ix + 1] / 2;
+      const near = hz[iz] + halfZ[iz] / 2;
+      const far = hz[iz + 1] - halfZ[iz + 1] / 2;
       const cellW = right - left;
       const cellD = far - near;
       // Vary parcel density block to block instead of stamping one repetitive subdivision.
@@ -603,23 +634,20 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       const gapX = (cellW - cols * plotW) / (cols + 1);
       const gapZ = (cellD - rows * plotD) / (rows + 1);
       // Short local lanes connect each parcel row directly to its surrounding streets.
-      if (!blocked(left, right, near, far)) {
-        const laneX = Math.max(4.5, Math.min(6.5, gapX - 2.2));
-        const laneZ = Math.max(4.5, Math.min(6.5, gapZ - 2.2));
-        for (let i = 1; i < cols; i++) {
-          const x = left + gapX + i * plotW + (i - 0.5) * gapX;
-          B.box(asphalt, laneX, 0.14, cellD, x, 0.10, near + cellD / 2, 0, 12);
-        }
-        for (let j = 1; j < rows; j++) {
-          const z = near + gapZ + j * plotD + (j - 0.5) * gapZ;
-          B.box(asphalt, cellW, 0.14, laneZ, left + cellW / 2, 0.10, z, 0, 12);
-        }
+      const laneX = Math.max(4.5, Math.min(6.5, gapX - 2.2));
+      const laneZ = Math.max(4.5, Math.min(6.5, gapZ - 2.2));
+      for (let i = 1; i < cols; i++) {
+        const x = left + gapX + i * plotW + (i - 0.5) * gapX;
+        B.box(asphalt, laneX, 0.14, cellD, x, 0.10, near + cellD / 2, 0, 12);
+      }
+      for (let j = 1; j < rows; j++) {
+        const z = near + gapZ + j * plotD + (j - 0.5) * gapZ;
+        B.box(asphalt, cellW, 0.14, laneZ, left + cellW / 2, 0.10, z, 0, 12);
       }
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
           const x = left + gapX + plotW / 2 + i * (plotW + gapX);
           const z = near + gapZ + plotD / 2 + j * (plotD + gapZ);
-          if (blocked(x - plotW / 2, x + plotW / 2, z - plotD / 2, z + plotD / 2)) continue;
           plots.push({
             matrix: m4.clone().makeTranslation(x, 0.06, z)
               .multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2))
@@ -643,11 +671,11 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     const line = Math.floor(r() * (2 * GRID)) - GRID;
     const along = -EDGE + r() * 2 * EDGE;
     const roadIndex = line + GRID;
-    const roadWidth = carriagewayWidth(roadIndex);
+    const roadWidth = axis ? halfZ[roadIndex] : halfX[roadIndex];
     const off = (roadWidth / 2 + 4.2) * (r() > 0.5 ? 1 : -1);
     const x = axis ? along : hx[roadIndex] + off;
     const z = axis ? hz[roadIndex] + off : along;
-    if (blocked(x - 4, x + 4, z - 4, z + 4)) { i--; continue; }
+    if (inParkRect(x, z, 6)) { i--; continue; }
     const s = 0.85 + r() * 0.6;
     m4.compose(new THREE.Vector3(x, 4.5 * s, z), new THREE.Quaternion(), new THREE.Vector3(s, s, s));
     trunkInstances.push({ matrix: m4.clone() });

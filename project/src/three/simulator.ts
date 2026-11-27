@@ -75,7 +75,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   const key = new THREE.DirectionalLight(0xfff0d6, 2.9);
   key.castShadow = true;
   key.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
-  Object.assign(key.shadow.camera, { left: -145, right: 145, top: 145, bottom: -145, near: 8, far: 420 });
+  Object.assign(key.shadow.camera, { left: -185, right: 185, top: 185, bottom: -185, near: 8, far: 480 });
   key.shadow.camera.updateProjectionMatrix();
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.06;
@@ -514,7 +514,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
     sky.uniforms.uDay.value = day;
     sky.update(t, camera.position, day);
     park.update(t, day);
-    openWorld.update(t, day);
+    openWorld.update(t);
     hall.winExt.emissive.setHex(0xffcf94);
     hall.winExt.emissiveIntensity = (1 - day) * 0.55;
     hall.tubeMaterial.emissiveIntensity = 0.04 + (1 - day) * 2.0;
@@ -524,9 +524,9 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
     key.intensity = 0.9 + 2.0 * day;
     key.color.setHex(0x9db6e8).lerp(new THREE.Color(0xfff0d6), day);
     const sunFrom = MOON_DIR.clone().lerp(SUN_DIR, day).normalize();
-    // Snap the shadow target to a 0.5-unit grid so texels stay stable while walking (no flicker).
-    const lightTarget = tmpLightTarget.set(Math.round(pos.x * 2) / 2, y, Math.round(pos.z * 2) / 2);
-    key.position.copy(sunFrom).multiplyScalar(160).add(lightTarget);
+    // Keep shadow target grounded at y = 0 and snapped to a 0.5-unit grid so park/hall/tree shadows stay stable both walking and flying.
+    const lightTarget = tmpLightTarget.set(Math.round(pos.x * 2) / 2, 0, Math.round(pos.z * 2) / 2);
+    key.position.copy(sunFrom).multiplyScalar(210).add(lightTarget);
     key.target.position.copy(lightTarget);
     // Re-render shadows only when the light, day, or character actually moved (smooth + no waste).
     if (lightTarget.x !== lastShadowX || lightTarget.z !== lastShadowZ || Math.abs(day - lastShadowDay) > 0.001 || spd > 0.05 || jet) {
