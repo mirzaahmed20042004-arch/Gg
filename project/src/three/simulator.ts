@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { buildCharacter, resetPose, applyExtras, defaultExtras, type Rig } from "./character";
+import { buildCharacter, resetPose, applyExtras, defaultExtras, RIG_METRICS, type Rig } from "./character";
 import { buildHall, type Bounds } from "./hall";
 import { buildPark } from "./park";
 import { tex, type Collider, type Seat } from "./kit";
@@ -25,7 +25,8 @@ const damp = (a: number, b: number, rate: number, dt: number) => a + (b - a) * (
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const inBox = (b: Bounds, x: number, z: number, m = 0) => x > b.minX - m && x < b.maxX + m && z > b.minZ - m && z < b.maxZ + m;
 
-const L1 = 1.3, L2 = 1.41, HIP = 3.05, ANK = 0.34, R = 1.15, TAU = Math.PI * 2;
+const { L1, L2, HIP, ANK } = RIG_METRICS;
+const R = 1.15, TAU = Math.PI * 2;
 const DUR = { clap: 1.9, kick: 0.95, punch: 0.6 };
 
 export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimApi {
@@ -273,15 +274,15 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
     tq.copy(n.quaternion); n.quaternion.copy(cQ[i]).slerp(tq, w);
     tv.copy(n.position); n.position.copy(cP[i]).lerp(tv, w);
   });
-  /** Two-bone IK: put the ankle `fz` ahead of and `down` below the hip joint. */
-  const legIK = (hip: THREE.Group, knee: THREE.Group, ankle: THREE.Group, fz: number, down: number, pitch: number, splay: number) => {
+  /** Two-bone IK: put the ankle `fz` ahead of and `down` below the hip joint, keeping sole level on roll. */
+  const legIK = (hip: THREE.Group, knee: THREE.Group, ankle: THREE.Group, fz: number, down: number, pitch: number, splay: number, yawComp = 0, ankleRoll = 0) => {
     const d = clamp(Math.hypot(fz, down), 0.6, L1 + L2 - 0.012);
     const th = Math.atan2(fz, down);
     const al = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
     const kn = Math.PI - Math.acos(clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1));
-    hip.rotation.set(-(th + al), 0, splay);
+    hip.rotation.set(-(th + al), yawComp, splay);
     knee.rotation.x = kn;
-    ankle.rotation.x = th + al - kn + pitch;
+    ankle.rotation.set(th + al - kn + pitch, 0, ankleRoll);
   };
 
   const clock = new THREE.Clock();
@@ -308,9 +309,9 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
         ? 46 * mag
         : crouchW > 0.5
           ? 3.4 * mag
-          : mag <= 0.85
-            ? 6.2 * (mag / 0.85)
-            : lerp(6.2, 13.5, (mag - 0.85) / 0.15);
+          : mag <= 0.84
+            ? 6.2 * (mag / 0.84)
+            : lerp(6.2, 14.6, (mag - 0.84) / 0.16);
     }
     const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
     const dirX = mag ? (fx * iy - fz * ix) / mag : 0, dirZ = mag ? (fz * iy + fx * ix) / mag : 0;
@@ -386,78 +387,198 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
       else if (sit.w <= 0) { sit = null; resolve(pos, y); }
     }
 
-    /* ---- locomotion pose ---- */
+    /* ---- locomotion pose (54-bone realistic female humanoid biomechanics + exact heel-to-toe IK) ---- */
     resetPose(rig);
     const X = defaultExtras();
-    const runF = c01((spd - 6.5) / 6);
-    const C = lerp(lerp(4.6, 9.2, runF), 3.4, crouchW);
-    if (grounded) phase = (phase + (spd * dt) / C) % 1;
-    const duty = lerp(0.62, 0.4, runF);
-    const A = ((duty * C) / 2) * moveW * Math.min(1, spd / 3 + 0.2);
-    const lift = lerp(0.55, 1.5, runF) * moveW;
-    const drop = moveW * (lerp(0.26, 0.36, runF) - 0.07 * Math.cos(phase * 2 * TAU)) + crouchW * 1.15 + land * 0.7 + (1 - moveW) * 0.02 * (1 + Math.sin(t * 1.6));
+    const idleW = 1 - moveW;
+    const breath = Math.sin(t * 1.65);
+    const idleShift = Math.sin(t * 0.58) * idleW * (1 - crouchW) * (1 - airW);
+
+    // Three smooth gait regimes: walk (<=6.2), run (6.2..11), sprint (11..14.6)
+    const runF = c01((spd - 6.2) / 4.8);
+    const sprintF = c01((spd - 10.6) / 4.0);
+    const baseC = lerp(lerp(lerp(3.55, 6.45, runF), 7.95, sprintF), 3.0, crouchW);
+    // Scale stride length proportionally at low startup/braking speeds so 2*A === duty*C -> exact zero foot sliding!
+    const lowSpdScale = clamp(spd / 5.0, 0.24, 1);
+    const C = baseC * lerp(1, lowSpdScale, 1 - runF);
+    if (grounded && spd > 0.02) phase = (phase + (spd * dt) / C) % 1;
+
+    const duty = lerp(lerp(0.58, 0.40, runF), 0.33, sprintF);
+    const A = ((duty * C) / 2) * moveW;
+    const lift = lerp(lerp(0.46, 1.18, runF), 1.52, sprintF) * moveW;
+    const stopBrake = c01(-accel / 30) * moveW * (1 - airW);
+
+    const gaitBounce = -0.055 * Math.cos(phase * 2 * TAU) * lerp(1, 1.45, runF);
+    const drop =
+      moveW * (lerp(lerp(0.24, 0.36, runF), 0.42, sprintF) + gaitBounce) +
+      stopBrake * 0.10 +
+      crouchW * 1.12 +
+      land * 0.68 +
+      idleW * (0.022 + 0.007 * (1 + breath));
     const hipH = HIP - drop;
+
     const sw = Math.cos(phase * TAU);
-    const sway = Math.sin((phase - duty / 2 + 0.25) * TAU) * moveW;
-    rig.hips.position.set(0.1 * sway, hipH, 0);
-    rig.hips.rotation.set(0, -0.07 * sw * moveW, 0.035 * sway);
-    const foot = (p: number): [number, number, number] => {
+    const sway = Math.sin((phase - duty * 0.5 + 0.25) * TAU) * moveW;
+    const hipRoll = 0.046 * sway + 0.026 * idleShift;
+    const hipYaw = -0.085 * sw * moveW * lerp(1, 1.25, runF);
+    rig.hips.position.set(0.085 * sway + 0.045 * idleShift, hipH, 0);
+    rig.hips.rotation.set(0, hipYaw, hipRoll);
+
+    // Exact heel-strike -> flat -> toe-off foot solver: [zOffset, ankleHeight, anklePitch, toePitch]
+    const foot = (p: number): [number, number, number, number] => {
       p = ((p % 1) + 1) % 1;
-      if (p < duty) { const s = p / duty; return [A * (1 - 2 * s), ANK + 0.22 * moveW * sm(0.7, 1, s), moveW * (0.55 * sm(0.65, 1, s) - 0.3 * (1 - sm(0, 0.25, s)))]; }
-      const s = (p - duty) / (1 - duty), e = s * s * (3 - 2 * s);
-      return [A * (2 * e - 1), ANK + lift * Math.sin(Math.PI * s) + 0.22 * moveW * (1 - s), moveW * (0.55 * (1 - s) - 0.3 * s)];
+      if (p < duty) {
+        const s = p / duty;
+        const heelIn = (1 - sm(0, 0.24, s)) * moveW;
+        const pushOff = sm(0.62, 1.0, s) * moveW;
+        const pitch = 0.48 * pushOff - 0.26 * heelIn;
+        const fy =
+          pitch >= 0
+            ? 0.08 + 0.26 * Math.cos(pitch) + 0.20 * Math.sin(pitch)
+            : ANK * Math.cos(pitch) - 0.18 * Math.sin(pitch);
+        return [A * (1 - 2 * s), fy, pitch, -pitch * (pitch > 0 ? 1 : 0.35)];
+      }
+      const s = (p - duty) / (1 - duty);
+      const e = s * s * (3 - 2 * s);
+      const swingArc = Math.sin(Math.PI * s) * (1 - 0.16 * s);
+      const pitch = moveW * (0.46 * (1 - sm(0, 0.36, s)) - 0.26 * sm(0.66, 1.0, s));
+      const fy = ANK + lift * swingArc + 0.12 * moveW * (1 - sm(0, 0.4, s));
+      const toeP = moveW * (-0.38 * (1 - sm(0, 0.32, s)) + 0.14 * sm(0.65, 1.0, s));
+      return [A * (2 * e - 1), fy, pitch, toeP];
     };
+
     const up = c01(vy / 42 + 0.5);
-    const legs: [THREE.Group, THREE.Group, THREE.Group, number, number][] = [
-      [rig.hipL, rig.kneeL, rig.ankleL, phase, 1], [rig.hipR, rig.kneeR, rig.ankleR, phase + 0.5, -1],
+    const legs: [THREE.Group, THREE.Group, THREE.Group, THREE.Group, number, number][] = [
+      [rig.hipL, rig.kneeL, rig.ankleL, rig.toeL, phase, 1],
+      [rig.hipR, rig.kneeR, rig.ankleR, rig.toeR, phase + 0.5, -1],
     ];
-    for (const [h, kn, an, p, side] of legs) {
-      const [z0, fy, pitch] = foot(p);
-      legIK(h, kn, an, lerp(z0 + crouchW * 0.15, side * 0.4, airW), lerp(hipH - fy, 2.3 - 0.4 * up, airW), lerp(pitch, 0.5, airW), side * (0.03 + crouchW * 0.12));
+    for (const [h, kn, an, toe, p, side] of legs) {
+      const [z0, fy, pitch, toeP] = foot(p);
+      const hipSideY = hipH + side * 0.32 * Math.sin(hipRoll);
+      const hipYawZ = -side * 0.32 * Math.sin(hipYaw);
+      const legSplay = side * (0.024 + crouchW * 0.11);
+      const airFz = side * 0.34 - 0.12 * (1 - up);
+      const airDown = 2.26 - 0.36 * up;
+      const airPitch = lerp(0.42, -0.12, 1 - up);
+      legIK(
+        h,
+        kn,
+        an,
+        lerp(z0 - hipYawZ + crouchW * 0.16, airFz, airW),
+        lerp(hipSideY - fy, airDown, airW),
+        lerp(pitch, airPitch, airW),
+        -hipRoll + legSplay,
+        -hipYaw * (1 - airW),
+        -legSplay * (1 - airW)
+      );
+      toe.rotation.x = lerp(toeP, 0.25 * up, airW);
     }
-    const armAmp = lerp(0.45, 0.95, runF) * moveW * (1 - crouchW * 0.5);
-    const eb = 0.2 + 1.25 * runF * moveW + crouchW * 0.6 + (1 - moveW) * 0.04 * Math.sin(t * 1.3);
-    rig.shoulderL.rotation.set(armAmp * sw + 0.05 - crouchW * 0.25 - airW * 1.0 * up, 0, 0.1 + 0.05 * runF + airW * 0.35);
-    rig.shoulderR.rotation.set(-armAmp * sw + 0.05 - crouchW * 0.25 - airW * 1.0 * up, 0, -0.1 - 0.05 * runF - airW * 0.35);
-    rig.elbowL.rotation.x = -(eb + 0.3 * moveW * Math.max(0, -sw) + airW * 0.4);
-    rig.elbowR.rotation.x = -(eb + 0.3 * moveW * Math.max(0, sw) + airW * 0.4);
-    const spX = 0.04 + 0.2 * runF * moveW + 0.5 * crouchW + leanX + land * 0.25;
-    const spY = 0.14 * sw * moveW + (1 - moveW) * 0.04 * Math.sin(t * 0.5);
-    rig.spine.rotation.set(spX, spY, -0.03 * sway);
-    rig.head.rotation.set(-spX * 0.7, -spY * 0.7 + (1 - moveW) * 0.16 * Math.sin(t * 0.4), 0);
-    X.curlL = X.curlR = 0.35 + 0.5 * runF;
-    X.smile = 0.3; X.mouthOpen = 0.04 + 0.12 * runF;
+
+    // Supple 2-segment spine + chest with natural breathing, forward sprint lean & axial counter-rotation
+    const totalLeanX =
+      0.025 +
+      lerp(0.04, lerp(0.22, 0.34, sprintF), runF) * moveW +
+      0.48 * crouchW +
+      leanX +
+      land * 0.24 -
+      stopBrake * 0.08 +
+      idleW * 0.014 * breath;
+    const totalTwistY = 0.16 * sw * moveW * lerp(1, 1.25, runF) + idleW * 0.028 * Math.sin(t * 0.48);
+    const totalRollZ = -0.68 * hipRoll - leanZ * 0.25;
+    rig.spine.rotation.set(totalLeanX * 0.46, totalTwistY * 0.45, totalRollZ * 0.50);
+    rig.chest.rotation.set(totalLeanX * 0.54 + idleW * 0.016 * breath, totalTwistY * 0.55, totalRollZ * 0.50);
+
+    // Articulated clavicles, shoulders, elbows & wrists
+    const clavBreath = (0.018 * breath + 0.015) * idleW;
+    rig.clavicleL.rotation.set(0, -0.05 * sw * moveW, clavBreath + 0.03 * runF * moveW);
+    rig.clavicleR.rotation.set(0, -0.05 * sw * moveW, -clavBreath - 0.03 * runF * moveW);
+
+    const armAmp = lerp(lerp(0.42, 0.92, runF), 1.16, sprintF) * moveW * (1 - crouchW * 0.48);
+    const eb =
+      0.16 +
+      lerp(0.14, lerp(1.18, 1.42, sprintF), runF) * moveW +
+      crouchW * 0.58 +
+      idleW * (0.05 + 0.025 * Math.sin(t * 1.35));
+    rig.shoulderL.rotation.set(
+      armAmp * sw + 0.04 - crouchW * 0.28 - airW * 0.92 * up,
+      -0.06 * sw * moveW,
+      0.09 + 0.05 * runF + airW * 0.34 + land * 0.16
+    );
+    rig.shoulderR.rotation.set(
+      -armAmp * sw + 0.04 - crouchW * 0.28 - airW * 0.92 * up,
+      -0.06 * sw * moveW,
+      -0.09 - 0.05 * runF - airW * 0.34 - land * 0.16
+    );
+    rig.elbowL.rotation.x = -(eb + 0.28 * moveW * Math.max(0, -sw) + airW * 0.38 + land * 0.22);
+    rig.elbowR.rotation.x = -(eb + 0.28 * moveW * Math.max(0, sw) + airW * 0.38 + land * 0.22);
+    rig.wristL.rotation.set(-0.10 * sw * moveW + 0.04 * idleW * Math.sin(t * 1.5), 0, 0.04);
+    rig.wristR.rotation.set(0.10 * sw * moveW + 0.04 * idleW * Math.sin(t * 1.5 + 1.2), 0, -0.04);
+
+    // Stabilized cybernetic neck & head counter-balance + turn anticipation
+    const turnLead = clamp((-turn / dt) * 0.055, -0.28, 0.28);
+    const idleLook = idleW * 0.12 * Math.sin(t * 0.38);
+    const headCompX = -totalLeanX * 0.76;
+    const headCompY = -totalTwistY * 0.78 + turnLead + idleLook;
+    const headCompZ = -(hipRoll + totalRollZ) * 0.65;
+    rig.neck.rotation.set(headCompX * 0.42, headCompY * 0.38, headCompZ * 0.45);
+    rig.head.rotation.set(headCompX * 0.58, headCompY * 0.62, headCompZ * 0.55);
+
+    // Dynamic finger & thumb articulation + subtle cyan core pulse
+    const baseCurl = lerp(0.22, lerp(0.55, 0.82, sprintF), runF) * moveW + idleW * 0.20 + crouchW * 0.15;
+    X.curlL = clamp(baseCurl + 0.05 * Math.sin(t * 1.8) * idleW + 0.08 * Math.max(0, -sw) * moveW, 0.06, 0.95);
+    X.curlR = clamp(baseCurl + 0.05 * Math.sin(t * 1.8 + 1.4) * idleW + 0.08 * Math.max(0, sw) * moveW, 0.06, 0.95);
+    X.spreadL = X.spreadR = clamp(0.08 + airW * 0.28 + land * 0.22, 0.04, 0.45);
+    X.energyPulse = 0.5 + 0.5 * Math.sin(t * (2.2 + runF * 2.4));
+
     if (jet) {
-      // Streamlined, prone Superman flight: arms reach forward, legs trail behind.
-      rig.hips.rotation.x = 0.12;
-      rig.hipL.rotation.x = 1.18;
-      rig.hipR.rotation.x = 1.18;
-      rig.kneeL.rotation.x = 0.08;
-      rig.kneeR.rotation.x = 0.08;
-      rig.ankleL.rotation.x = -0.08;
-      rig.ankleR.rotation.x = -0.08;
-      rig.shoulderL.rotation.set(-2.48, 0, 0.12);
-      rig.shoulderR.rotation.set(-2.48, 0, -0.12);
-      rig.elbowL.rotation.x = -0.08;
-      rig.elbowR.rotation.x = -0.08;
-      rig.wristL.rotation.x = -0.05;
-      rig.wristR.rotation.x = -0.05;
-      rig.spine.rotation.x = 1.02;
-      rig.head.rotation.x = -0.28;
-      X.smile = 0.45;
-      X.mouthOpen = 0.08;
+      // Streamlined cybernetic flight pose: arms swept cleanly forward/alongside, spine extended, toes pointed.
+      rig.hips.rotation.set(0.14, 0, 0);
+      rig.hipL.rotation.set(1.16, 0, 0.04);
+      rig.hipR.rotation.set(1.16, 0, -0.04);
+      rig.kneeL.rotation.x = 0.10;
+      rig.kneeR.rotation.x = 0.10;
+      rig.ankleL.rotation.x = 0.36;
+      rig.ankleR.rotation.x = 0.36;
+      rig.toeL.rotation.x = 0.18;
+      rig.toeR.rotation.x = 0.18;
+      rig.clavicleL.rotation.set(0, 0, 0.08);
+      rig.clavicleR.rotation.set(0, 0, -0.08);
+      rig.shoulderL.rotation.set(-2.46, 0, 0.12);
+      rig.shoulderR.rotation.set(-2.46, 0, -0.12);
+      rig.elbowL.rotation.x = -0.10;
+      rig.elbowR.rotation.x = -0.10;
+      rig.wristL.rotation.set(-0.05, 0, 0);
+      rig.wristR.rotation.set(-0.05, 0, 0);
+      rig.spine.rotation.set(0.50, 0, 0);
+      rig.chest.rotation.set(0.52, 0, 0);
+      rig.neck.rotation.set(-0.18, 0, 0);
+      rig.head.rotation.set(-0.22, 0, 0);
+      X.curlL = X.curlR = 0.14;
+      X.spreadL = X.spreadR = 0.06;
+      X.energyPulse = 0.85 + 0.15 * Math.sin(t * 6);
     }
 
     /* ---- sit pose ---- */
     if (sit) {
       snap();
-      rig.hips.position.set(0, sit.seat.y + 0.32, 0);
+      rig.hips.position.set(0, sit.seat.y + 0.34, 0);
       rig.hips.rotation.set(0, 0, 0);
-      rig.spine.rotation.set(-0.07, 0, 0);
-      rig.head.rotation.set(0.04, Math.sin(t * 0.4) * 0.25, 0);
-      for (const [h, kn, an, , side] of legs) { h.rotation.set(-1.5, 0, side * 0.09); kn.rotation.x = 1.5; an.rotation.x = 0; }
-      rig.shoulderL.rotation.set(-0.42, 0, 0.14); rig.shoulderR.rotation.set(-0.42, 0, -0.14);
-      rig.elbowL.rotation.x = rig.elbowR.rotation.x = -0.85;
+      rig.spine.rotation.set(-0.04, 0, 0);
+      rig.chest.rotation.set(-0.03 + 0.012 * breath, 0, 0);
+      rig.neck.rotation.set(0.02, Math.sin(t * 0.4) * 0.10, 0);
+      rig.head.rotation.set(0.03, Math.sin(t * 0.4) * 0.16, 0);
+      for (const [h, kn, an, toe, , side] of legs) {
+        h.rotation.set(-1.50, 0, side * 0.06);
+        kn.rotation.x = 1.50;
+        an.rotation.x = 0;
+        toe.rotation.x = 0;
+      }
+      rig.shoulderL.rotation.set(-0.38, 0, 0.11);
+      rig.shoulderR.rotation.set(-0.38, 0, -0.11);
+      rig.elbowL.rotation.x = rig.elbowR.rotation.x = -0.82;
+      rig.wristL.rotation.set(-0.08, 0, 0.06);
+      rig.wristR.rotation.set(-0.08, 0, -0.06);
+      X.curlL = X.curlR = 0.32;
       blend(sm(0, 1, sit.w));
     }
 
@@ -475,7 +596,7 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
           el.rotation.x = -1.25;
         }
         rig.head.rotation.x += 0.05;
-        X.curlL = X.curlR = 0.05; X.smile = 0.9; X.mouthOpen = 0.3; X.browRaise = 0.5;
+        X.curlL = X.curlR = 0.05;
       } else if (action.name === "punch") {
         const j = Math.pow(Math.sin(Math.PI * c01(a / 0.45)), 1.4), s = punchLeft ? 1 : -1;
         rig.shoulderL.rotation.set(-1.15, 0, -0.3); rig.elbowL.rotation.x = -2.35;
@@ -483,12 +604,13 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
         const sh = s > 0 ? rig.shoulderL : rig.shoulderR, el = s > 0 ? rig.elbowL : rig.elbowR;
         sh.rotation.set(-1.15 - 0.42 * j, 0, -s * (0.3 - 0.22 * j));
         el.rotation.x = -2.35 + 2.2 * j;
-        rig.spine.rotation.set(0.12, -s * 0.5 * j, 0);
+        rig.spine.rotation.set(0.06, -s * 0.24 * j, 0);
+        rig.chest.rotation.set(0.06, -s * 0.28 * j, 0);
         rig.head.rotation.set(-0.05, s * 0.4 * j, 0);
         legIK(rig.hipL, rig.kneeL, rig.ankleL, s * 0.55, hipH - 0.12 - ANK, 0, 0.08);
         legIK(rig.hipR, rig.kneeR, rig.ankleR, -s * 0.55, hipH - 0.12 - ANK, 0, -0.08);
         rig.hips.position.y = hipH - 0.12;
-        X.curlL = X.curlR = 1; X.browInner = -0.85; X.smile = -0.2; X.mouthOpen = 0.08 + 0.25 * j;
+        X.curlL = X.curlR = 0.95;
       } else {
         const w0 = Math.sin(Math.PI * c01(a / 0.34)), k = Math.sin(Math.PI * c01((a - 0.2) / 0.6));
         rig.hipR.rotation.set(0.5 * w0 * (1 - k) - 1.6 * k, 0, -0.05);
@@ -496,20 +618,24 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
         rig.ankleR.rotation.x = 0.45 * k;
         legIK(rig.hipL, rig.kneeL, rig.ankleL, 0.1 * k, hipH - 0.08 - ANK, 0, 0.06);
         rig.hips.position.y = hipH - 0.08;
-        rig.spine.rotation.set(-0.24 * k + 0.1 * w0 * (1 - k), 0.25 * k, 0);
+        rig.spine.rotation.set(-0.12 * k + 0.05 * w0 * (1 - k), 0.12 * k, 0);
+        rig.chest.rotation.set(-0.12 * k + 0.05 * w0 * (1 - k), 0.13 * k, 0);
         rig.head.rotation.set(0.15 * k, -0.2 * k, 0);
         rig.shoulderL.rotation.set(-0.6 * k, 0, 0.12 + 0.75 * k); rig.elbowL.rotation.x = -0.5;
         rig.shoulderR.rotation.set(0.55 * k, 0, -0.12 - 0.5 * k); rig.elbowR.rotation.x = -0.4;
-        X.curlL = X.curlR = 0.8; X.browInner = -0.5; X.mouthOpen = 0.3 * k;
+        X.curlL = X.curlR = 0.8;
       }
       blend(w);
       if (a >= dur) action = null;
     }
 
-    // Character awareness follows the orbit camera, including upward sky views.
+    // Character awareness smoothly splits across cybernetic neck & head following orbit camera.
     const lookYaw = clamp(wrap(camYaw - facing), -1.05, 1.05);
-    rig.head.rotation.y += lookYaw * 0.42;
-    rig.head.rotation.x -= clamp(0.42 - camPitch, -0.7, 0.9) * 0.48;
+    const lookPitch = clamp(0.42 - camPitch, -0.7, 0.9);
+    rig.neck.rotation.y += lookYaw * 0.16;
+    rig.head.rotation.y += lookYaw * 0.28;
+    rig.neck.rotation.x -= lookPitch * 0.18;
+    rig.head.rotation.x -= lookPitch * 0.30;
 
     rig.root.position.set(pos.x, y, pos.z);
     rig.root.rotation.set(0, facing, leanZ);
