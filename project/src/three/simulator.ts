@@ -128,8 +128,11 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
         // Real height logic: flying above a solid's top means no collision.
         if (c.top !== undefined && py >= c.top) continue;
         if (c.kind === "circle") {
-          const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), m = c.r + R;
-          if (d < m) { if (d < 1e-4) p.x += m; else { p.x = c.x + (dx / d) * m; p.z = c.z + (dz / d) * m; } }
+          const dx = p.x - c.x, dz = p.z - c.z, m = c.r + R, d2 = dx * dx + dz * dz;
+          if (d2 < m * m) {
+            if (d2 < 1e-8) p.x += m;
+            else { const d = Math.sqrt(d2); p.x = c.x + (dx / d) * m; p.z = c.z + (dz / d) * m; }
+          }
           continue;
         }
         if (c.active && !c.active()) continue;

@@ -26,10 +26,6 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     for (let i = 0; i < 60; i++) { c.fillStyle = `rgba(25,15,8,${0.2 + r() * 0.3})`; c.fillRect(r() * w, r() * h, 2 + r() * 3, 20 + r() * 60); }
   }), 1);
   const hedgeM = mapped(tex(128, 128, (c, w, h) => speckle(c, w, h, "#2f6230", ["#224a24", "#40793c", "#18381a"], 2600, 5, 5)), 1);
-  const facadeM = mapped(tex(256, 256, (c, w, h) => {
-    speckle(c, w, h, "#b7ad9c", ["#a1978a", "#c9c0b0"], 800, 8, 14);
-    for (let y = 22; y < h; y += 64) for (let x = 20; x < w; x += 64) { c.fillStyle = "#3a4a57"; c.fillRect(x, y, 30, 38); c.fillStyle = "rgba(255,255,255,0.18)"; c.fillRect(x, y, 30, 6); }
-  }), 0.9);
   const leafM = [0x3f7d34, 0x2f6a2c, 0x558f3a].map((c) => std(c, 0.95, { flatShading: true }));
   const stoneM = std(0xc9bfa6, 0.9);
   const iron = std(0x1f2428, 0.55, { metalness: 0.6 });
@@ -155,16 +151,9 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   };
   car(-48, 84.6, 0xe9e6dd); car(60, 84.6, 0x8e1f25); car(30, 99.4, 0x1f3f6b);
 
-  // distant city blocks across the road (solid: collide + standable roofs)
+  // No buildings in front of Frere Hall (open view across the road).
   const r = rng(42);
   const roofs: [number, number, number, number, number][] = [];
-  for (let x = -190; x <= 190; x += 38) {
-    const h = 26 + r() * 40;
-    const bw = 30 + r() * 6, bx = x + r() * 6, bz = 136 + r() * 8;
-    P.box(facadeM, bw, h, 22, bx, h / 2, bz, 0, 14);
-    colliders.push(boxCol(bx, bz, bw, 22, undefined, h));
-    roofs.push([bx - bw / 2, bx + bw / 2, bz - 11, bz + 11, h]);
-  }
 
   /* ---------- trees ---------- */
   const trunkG = lathe([[1.75, 0], [1.2, 0.9], [0.95, 3], [0.85, 7], [0.92, 9.6], [0.55, 12.2]], 10, true);

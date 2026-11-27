@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { Batch, tex, speckle, std, mapped, boxCol, circleCol, rng, type Collider } from "./kit";
 
 export const SUN_DIR = new THREE.Vector3(0.44, 0.58, 0.69).normalize();
@@ -307,23 +308,8 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   asphalt.normalMap = asphaltNormal;
   asphalt.normalScale.set(0.16, 0.16);
   asphalt.roughness = 0.9;
-  const white = std(0xe9e5d8, 0.85);
+  const white = std(0xf7f5ed, 0.72);
   const signalMetal = std(0x20272b, 0.48, { metalness: 0.65 });
-  const signTex = tex(256, 256, (c, w, h) => {
-    c.clearRect(0, 0, w, h);
-    c.fillStyle = "#b3262c";
-    c.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = Math.PI / 8 + i * Math.PI / 4;
-      const x = w / 2 + Math.cos(a) * 112, y = h / 2 + Math.sin(a) * 112;
-      i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
-    }
-    c.closePath(); c.fill();
-    c.lineWidth = 9; c.strokeStyle = "#f6eee1"; c.stroke();
-    c.fillStyle = "#fff8eb"; c.textAlign = "center"; c.textBaseline = "middle";
-    c.font = "900 54px Arial, sans-serif"; c.fillText("STOP", w / 2, h / 2, w - 60);
-  }, false);
-  const stopFace = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.65, side: THREE.DoubleSide });
   // Street lights live only at Frere Hall (park lamps); the open world has none.
   const streetLights: { x: number; z: number; y: number }[] = [];
 
@@ -339,7 +325,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   const road = (x1: number, z1: number, x2: number, z2: number) => {
     const w = x2 - x1, d = z2 - z1;
     if (w <= 0 || d <= 0) return;
-    B.box(asphalt, w, 0.14, d, (x1 + x2) / 2, 0.12, (z1 + z2) / 2, 0, 12);
+    B.box(asphalt, w, 0.14, d, (x1 + x2) / 2, 0.10, (z1 + z2) / 2, 0, 12);
   };
 
   // road grid (skipping the park)
@@ -363,11 +349,10 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     for (const [z1, z2] of freeRuns(-EDGE, EDGE, cuts)) road(x - width / 2, z1, x + width / 2, z2);
   }
 
-  // lane dashes (broken centre lines stay on the roads that remain)
-  const dashG = new THREE.BoxGeometry(4.2, 0.03, 0.75);
+  // White broken centre lines clearly visible above asphalt on every single and double road.
+  const dashG = new THREE.BoxGeometry(5.0, 0.045, 0.85);
   const dashes: WorldInstance[] = [];
   const m4 = new THREE.Matrix4();
-  // Broken centre lines run down the middle of every road (no medians anywhere).
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi];
     const width = halfZ[zi];
@@ -375,7 +360,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     for (const c of CUT) if (z >= c.z1 - width / 2 && z <= c.z2 + width / 2) horizontalCuts.push([c.x1, c.x2]);
     for (const [runStart, runEnd] of freeRuns(-EDGE, EDGE, horizontalCuts)) {
       for (let x = runStart; x < runEnd; x += 15) {
-        dashes.push({ matrix: m4.clone().makeTranslation(x, 0.17, z) });
+        dashes.push({ matrix: m4.clone().makeTranslation(x, 0.21, z) });
       }
     }
   }
@@ -386,7 +371,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     for (const c of CUT) if (x >= c.x1 - width / 2 && x <= c.x2 + width / 2) verticalCuts.push([c.z1, c.z2]);
     for (const [runStart, runEnd] of freeRuns(-EDGE, EDGE, verticalCuts)) {
       for (let z = runStart; z < runEnd; z += 15) {
-        dashes.push({ matrix: m4.clone().makeTranslation(x, 0.17, z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)) });
+        dashes.push({ matrix: m4.clone().makeTranslation(x, 0.21, z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)) });
       }
     }
   }
@@ -394,7 +379,7 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
 
   // Zebra crossings sit only at connected junctions, never drift onto the grass.
   const crossingRecords: WorldInstance[] = [];
-  const crossingBar = new THREE.BoxGeometry(0.52, 0.035, 1);
+  const crossingBar = new THREE.BoxGeometry(0.52, 0.04, 1);
   const arrowShape = new THREE.Shape();
   arrowShape.moveTo(-0.36, -1.35); arrowShape.lineTo(0.36, -1.35);
   arrowShape.lineTo(0.36, 0.05); arrowShape.lineTo(0.92, 0.05);
@@ -406,17 +391,15 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       if (zi % 4 !== 0) continue;
       const x = hx[xi], z = hz[zi], widthX = halfX[xi], widthZ = halfZ[zi];
       if (blocked(x - widthX / 2, x + widthX / 2, z - widthZ / 2, z + widthZ / 2)) continue;
-      // Four approaches: five broad bars across each carriageway.
       // Four approaches: five broad bars across each carriageway (no medians, full width).
       for (const side of [-1, 1]) {
         for (let n = 0; n < 5; n++) {
           const alongX = x + side * (widthX / 2 + 3.2 + n * 0.92);
           const alongZ = z + side * (widthZ / 2 + 3.2 + n * 0.92);
-          crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.176, z).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthZ - 2))) });
-          crossingRecords.push({ matrix: m4.clone().makeTranslation(x, 0.176, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthX - 2))) });
+          crossingRecords.push({ matrix: m4.clone().makeTranslation(alongX, 0.205, z).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthZ - 2))) });
+          crossingRecords.push({ matrix: m4.clone().makeTranslation(x, 0.205, alongZ).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, Math.max(8, widthX - 2))) });
         }
       }
-      // Separate through and left-turn lane arrows (centred lanes, no median).
       const innerX = widthX / 8;
       const outerX = (3 * widthX) / 8;
       const innerZ = widthZ / 8;
@@ -431,16 +414,15 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
         [x + widthX / 2 + 15, z + outerZ, -Math.PI / 2],
         [x + widthX / 2 + 15, z + innerZ, Math.PI],
       ];
-      for (const [ax, az, yaw] of arrowMarks) B.add(white, arrowGeo, ax, 0.182, az, [Math.PI / 2, yaw, 0], [0.88, 1, 1]);
+      for (const [ax, az, yaw] of arrowMarks) B.add(white, arrowGeo, ax, 0.205, az, [Math.PI / 2, yaw, 0], [0.88, 1, 1]);
     }
   }
   addWorldInstances(scene, crossingBar, white, crossingRecords, 800, false, false);
 
-  // Arterial lights and curb drains repeat along roads, not across the empty plots.
-  const drainMat = std(0x3c4142, 0.78, { metalness: 0.22 });
-  const drainForHorizontal = (x: number, z: number) => B.box(drainMat, 1.35, 0.045, 0.56, x, 0.185, z);
-  const drainForVertical = (x: number, z: number) => B.box(drainMat, 0.56, 0.045, 1.35, x, 0.185, z);
   // Curb drains repeat along roads (street lights live only at Frere Hall).
+  const drainMat = std(0x3c4142, 0.78, { metalness: 0.22 });
+  const drainForHorizontal = (x: number, z: number) => B.box(drainMat, 1.35, 0.045, 0.56, x, 0.182, z);
+  const drainForVertical = (x: number, z: number) => B.box(drainMat, 0.56, 0.045, 1.35, x, 0.182, z);
   for (let zi = 0; zi < hz.length; zi++) {
     const z = hz[zi], width = halfZ[zi];
     for (let side of [-1, 1]) {
@@ -456,145 +438,147 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
     }
   }
 
-  // Stop signs mark secondary streets where they meet a main road.
-  const stopPoleG = new THREE.CylinderGeometry(0.065, 0.085, 3.5, 8);
+  // Real 4-corner traffic lights at every road junction (strictly 30s countdown per phase, 60s full cycle).
+  // No extra yellow time added outside the 30s timer: yellow lights up inside the final seconds of the 30s phase,
+  // and the 3 separate bulbs (Red / Yellow / Green) physically turn ON and OFF in sync with the timer.
+  const SIG_HALF = 30;
+  const SIG_CYCLE = SIG_HALF * 2; // 60s total (30s per axis, timer strictly 30..1)
+  const axisState = (t: number, axis: 0 | 1): { lamp: "green" | "amber" | "red"; remain: number } => {
+    const inFirstHalf = t < SIG_HALF;
+    const local = inFirstHalf ? t : t - SIG_HALF; // 0 .. <30
+    const remain = Math.max(1, Math.min(30, Math.ceil(SIG_HALF - local)));
+    const goingAxis = (axis === 0) === inFirstHalf;
+    if (goingAxis) {
+      if (remain > 3) return { lamp: "green", remain };
+      if (remain === 3) return { lamp: "amber", remain };
+      return { lamp: "red", remain };
+    }
+    return { lamp: remain <= 2 ? "amber" : "red", remain };
+  };
+
+  // Single merged template for pole + plinth + 3-bulb housing + weather cap + 3 visors + timer frame (facing local +Z).
+  const sigPart = (geo: THREE.BufferGeometry, x: number, y: number, z: number) => {
+    const g = geo.index ? geo.toNonIndexed() : geo.clone();
+    g.translate(x, y, z);
+    for (const k of Object.keys(g.attributes)) {
+      if (k !== "position" && k !== "normal" && k !== "uv") g.deleteAttribute(k);
+    }
+    return g;
+  };
+  const sigParts: THREE.BufferGeometry[] = [
+    sigPart(new THREE.BoxGeometry(0.46, 0.28, 0.46), 0, 0.14, 0),
+    sigPart(new THREE.CylinderGeometry(0.13, 0.19, 5.5, 10), 0, 2.75, 0),
+    sigPart(new THREE.BoxGeometry(0.96, 2.52, 0.72), 0, 6.65, 0),
+    sigPart(new THREE.BoxGeometry(1.12, 0.14, 0.88), 0, 7.98, 0.04),
+    sigPart(new THREE.BoxGeometry(1.06, 1.06, 0.18), 0, 4.55, 0.18),
+  ];
+  for (let n = 0; n < 3; n++) {
+    const by = 7.40 - n * 0.75;
+    sigParts.push(sigPart(new THREE.BoxGeometry(0.58, 0.08, 0.48), 0, by + 0.25, 0.48));
+  }
+  const signalBodyGeo = mergeGeometries(sigParts, false)!;
+  sigParts.forEach((g) => g.dispose());
+
+  const bulbGeo = new THREE.SphereGeometry(0.21, 12, 10);
+  const timerGeo = new THREE.PlaneGeometry(0.96, 0.96);
+  const dimRed = new THREE.Color(0x220a09), dimAmber = new THREE.Color(0x241a07), dimGreen = new THREE.Color(0x082210);
+  const redLamp = new THREE.Color(0xff261b), amberLamp = new THREE.Color(0xffbe14), greenLamp = new THREE.Color(0x1ff068);
+  const bulbMats: [
+    [THREE.MeshBasicMaterial, THREE.MeshBasicMaterial, THREE.MeshBasicMaterial],
+    [THREE.MeshBasicMaterial, THREE.MeshBasicMaterial, THREE.MeshBasicMaterial],
+  ] = [
+    [
+      new THREE.MeshBasicMaterial({ color: dimRed.clone(), toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: dimAmber.clone(), toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: greenLamp.clone(), toneMapped: false }),
+    ],
+    [
+      new THREE.MeshBasicMaterial({ color: redLamp.clone(), toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: dimAmber.clone(), toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: dimGreen.clone(), toneMapped: false }),
+    ],
+  ];
+
+  const signalBodies: WorldInstance[] = [];
+  const bulbsByAxisLamp: [[WorldInstance[], WorldInstance[], WorldInstance[]], [WorldInstance[], WorldInstance[], WorldInstance[]]] = [
+    [[], [], []],
+    [[], [], []],
+  ];
+  const timersByAxis: [WorldInstance[], WorldInstance[]] = [[], []];
+  const rotM = new THREE.Matrix4();
+  const localM = new THREE.Matrix4();
+
   for (let xi = 0; xi < hx.length; xi++) {
     for (let zi = 0; zi < hz.length; zi++) {
       const x = hx[xi], z = hz[zi], wx = halfX[xi], wz = halfZ[zi];
-      const xMajor = wx >= 30, zMajor = wz >= 30;
-      if (xMajor === zMajor || blocked(x - 2, x + 2, z - 2, z + 2)) continue;
-      if (xMajor && zi % 2 !== 0) continue;
-      if (zMajor && xi % 2 !== 0) continue;
-      for (const side of [-1, 1]) {
-        const sx = xMajor ? x + side * (wx / 2 + 4.0) : x + side * (wx / 2 + 4.0);
-        const sz = zMajor ? z + side * (wz / 2 + 4.0) : z + side * (wz / 2 + 4.0);
-        if (blocked(sx - 2, sx + 2, sz - 2, sz + 2)) continue;
-        B.add(signalMetal, stopPoleG, sx, 1.85, sz);
-        const yaw = xMajor ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : (side > 0 ? 0 : Math.PI);
-        B.add(stopFace, new THREE.PlaneGeometry(1.65, 1.65), sx, 4.05, sz, [0, yaw, 0]);
-        colliders.push(circleCol(sx, sz, 0.32));
+      if (blocked(x - 1, x + 1, z - 1, z + 1)) continue;
+      // Four corners of every road junction, each facing oncoming traffic along its road axis.
+      const corners: Array<[number, number, 0 | 1, number]> = [
+        [-1, 1, 0, Math.PI],
+        [1, -1, 0, 0],
+        [1, 1, 1, -Math.PI / 2],
+        [-1, -1, 1, Math.PI / 2],
+      ];
+      for (const [sx, sz, axis, yaw] of corners) {
+        const px = x + sx * (wx / 2 + 1.15);
+        let pz = z + sz * (wz / 2 + 1.15);
+        // Keep north corners on Frere Hall's front road right at the north roadside edge, never inside asphalt.
+        if (Math.abs(px) < 260 && pz > 79.5 && pz < 104.5) pz = 79.0;
+        const baseM = m4.clone().makeTranslation(px, 0, pz).multiply(rotM.makeRotationY(yaw));
+        signalBodies.push({ matrix: baseM });
+        for (let n = 0; n < 3; n++) {
+          const by = 7.40 - n * 0.75;
+          bulbsByAxisLamp[axis][n].push({ matrix: baseM.clone().multiply(localM.makeTranslation(0, by, 0.36)) });
+        }
+        timersByAxis[axis].push({ matrix: baseM.clone().multiply(localM.makeTranslation(0, 4.55, 0.28)) });
+        colliders.push(circleCol(px, pz, 0.5, 8.1));
       }
     }
   }
 
-  // Signal poles and heads are batched; only the lens colors animate at phase changes.
-  // Real 4-way timing: 30s green, 4s yellow, 2s all-red per axis (72s cycle) + countdown timers.
-  const SIG_GREEN = 30, SIG_YELLOW = 4, SIG_CLEAR = 2;
-  const SIG_CYCLE = (SIG_GREEN + SIG_YELLOW + SIG_CLEAR) * 2; // 72
-  const axisState = (t: number, axis: 0 | 1): { lamp: "green" | "amber" | "red"; remain: number } => {
-    if (axis === 0) {
-      if (t < SIG_GREEN) return { lamp: "green", remain: Math.ceil(SIG_GREEN - t) };
-      if (t < SIG_GREEN + SIG_YELLOW) return { lamp: "amber", remain: Math.ceil(SIG_GREEN + SIG_YELLOW - t) };
-      return { lamp: "red", remain: Math.ceil(SIG_CYCLE - t) };
-    }
-    const half = SIG_GREEN + SIG_YELLOW + SIG_CLEAR; // 36
-    if (t < half) return { lamp: "red", remain: Math.ceil(half - t) };
-    if (t < half + SIG_GREEN) return { lamp: "green", remain: Math.ceil(half + SIG_GREEN - t) };
-    if (t < half + SIG_GREEN + SIG_YELLOW) return { lamp: "amber", remain: Math.ceil(half + SIG_GREEN + SIG_YELLOW - t) };
-    return { lamp: "red", remain: Math.ceil(SIG_CYCLE - t) };
-  };
-  const poleGeometry = new THREE.CylinderGeometry(0.13, 0.19, 6.3, 10);
-  const bulbGeo = new THREE.SphereGeometry(0.18, 10, 8);
-  const bulbMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, toneMapped: false });
-  const signalGroups: { first: number; axis: 0 | 1; offset: number }[] = [];
-  const bulbMatrices: THREE.Matrix4[] = [];
-  const timerMatrices = new Map<string, THREE.Matrix4[]>();
-  const dimRed = new THREE.Color(0x45201d), dimAmber = new THREE.Color(0x48351b), dimGreen = new THREE.Color(0x1c4029);
-  const redLamp = new THREE.Color(0xff382e), amberLamp = new THREE.Color(0xffb31e), greenLamp = new THREE.Color(0x43ee7a);
-  // Traffic lights across the whole city (every 2nd junction).
-  for (let xi = 0; xi < hx.length; xi += 2) {
-    for (let zi = 0; zi < hz.length; zi += 2) {
-      const x = hx[xi], z = hz[zi], wx = halfX[xi], wz = halfZ[zi];
-      if (blocked(x - wx / 2, x + wx / 2, z - wz / 2, z + wz / 2)) continue;
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        const px = x + sx * (wx / 2 + 1.75);
-        const pz = z + sz * (wz / 2 + 1.75);
-        B.add(signalMetal, poleGeometry, px, 3.15, pz);
-        B.box(signalMetal, 1.05, 2.6, 0.8, px, 6.4, pz);
-        B.box(signalMetal, 1.25, 0.16, 1.0, px, 7.78, pz);
-        const first = bulbMatrices.length;
-        const axis: 0 | 1 = sx === sz ? 0 : 1;
-        const offset = (xi * 17 + zi * 29) % 9;
-        const lampZ = pz + (sz < 0 ? 0.42 : -0.42);
-        for (let n = 0; n < 3; n++) {
-          const by = 7.15 - n * 0.72;
-          bulbMatrices.push(m4.clone().makeTranslation(px, by, lampZ).multiply(new THREE.Matrix4().makeScale(1.05, 1.05, 1.05)));
-          // Visor hood over each lens (real signal look).
-          B.box(signalMetal, 0.62, 0.08, 0.55, px, by + 0.26, lampZ + (sz < 0 ? 0.18 : -0.18));
-        }
-        signalGroups.push({ first, axis, offset });
-        // Countdown timer display below the head, facing traffic.
-        const tKey = `${offset}:${axis}`;
-        let tArr = timerMatrices.get(tKey);
-        if (!tArr) timerMatrices.set(tKey, (tArr = []));
-        tArr.push(m4.clone().makeTranslation(px, 4.85, lampZ).multiply(new THREE.Matrix4().makeRotationY(sz < 0 ? 0 : Math.PI)));
-        colliders.push(circleCol(px, pz, 0.48));
-      }
+  addWorldInstances(scene, signalBodyGeo, signalMetal, signalBodies, 800, true, true);
+  for (const axis of [0, 1] as const) {
+    for (let n = 0; n < 3; n++) {
+      addWorldInstances(scene, bulbGeo, bulbMats[axis][n], bulbsByAxisLamp[axis][n], 800, false, false);
     }
   }
-  const bulbMesh = new THREE.InstancedMesh(bulbGeo, bulbMaterial, bulbMatrices.length);
-  bulbMatrices.forEach((matrix, i) => bulbMesh.setMatrixAt(i, matrix));
-  bulbMesh.instanceMatrix.needsUpdate = true;
-  bulbMesh.computeBoundingSphere();
-  bulbMesh.frustumCulled = true;
-  scene.add(bulbMesh);
-  // One shared countdown texture per (offset, axis) group — updated once per second.
-  const timerDisplays: { offset: number; axis: 0 | 1; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture }[] = [];
-  const timerGeo = new THREE.PlaneGeometry(1.15, 1.15);
-  for (const [key, mats] of timerMatrices) {
-    const [oStr, aStr] = key.split(":");
-    const offset = Number(oStr), axis = Number(aStr) as 0 | 1;
+
+  const timerDisplays: { axis: 0 | 1; ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture }[] = [];
+  for (const axis of [0, 1] as const) {
     const canvas = document.createElement("canvas");
     canvas.width = 128; canvas.height = 128;
     const ctx = canvas.getContext("2d")!;
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
-    timerDisplays.push({ offset, axis, canvas, ctx, texture });
-    const mesh = new THREE.InstancedMesh(timerGeo, new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }), mats.length);
-    mats.forEach((m, i) => mesh.setMatrixAt(i, m));
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
-    mesh.frustumCulled = true;
-    scene.add(mesh);
+    timerDisplays.push({ axis, ctx, texture });
+    const mat = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
+    addWorldInstances(scene, timerGeo, mat, timersByAxis[axis], 800, false, false);
   }
-  const drawTimer = (d: typeof timerDisplays[number], time: number) => {
-    const t = (time + d.offset) % SIG_CYCLE;
-    const st = axisState(t, d.axis);
-    const c = d.ctx;
-    c.fillStyle = "#05070a";
-    c.fillRect(0, 0, 128, 128);
-    c.strokeStyle = "#3a4148";
-    c.lineWidth = 6;
-    c.strokeRect(4, 4, 120, 120);
-    c.fillStyle = st.lamp === "green" ? "#43ee7a" : st.lamp === "amber" ? "#ffb31e" : "#ff382e";
-    c.font = "900 76px Arial, sans-serif";
-    c.textAlign = "center";
-    c.textBaseline = "middle";
-    c.fillText(String(st.remain), 64, 68);
-    d.texture.needsUpdate = true;
-  };
-  let lastSignalPhase = -1;
-  let lastTimerSec = -1;
+
+  let lastSignalSec = -1;
   const updateSignals = (time: number) => {
-    const globalPhase = Math.floor((time % SIG_CYCLE) * 2);
-    if (globalPhase !== lastSignalPhase) {
-      lastSignalPhase = globalPhase;
-      for (const signal of signalGroups) {
-        const t = (time + signal.offset) % SIG_CYCLE;
-        const lamp = axisState(t, signal.axis).lamp;
-        const colors = lamp === "amber"
-          ? [dimRed, amberLamp, dimGreen]
-          : lamp === "green"
-            ? [dimRed, dimAmber, greenLamp]
-            : [redLamp, dimAmber, dimGreen];
-        colors.forEach((color, i) => bulbMesh.setColorAt(signal.first + i, color));
-      }
-      if (bulbMesh.instanceColor) bulbMesh.instanceColor.needsUpdate = true;
-    }
     const sec = Math.floor(time);
-    if (sec !== lastTimerSec) {
-      lastTimerSec = sec;
-      for (const d of timerDisplays) drawTimer(d, time);
+    if (sec === lastSignalSec) return;
+    lastSignalSec = sec;
+    const t = sec % SIG_CYCLE;
+    for (const d of timerDisplays) {
+      const st = axisState(t, d.axis);
+      const [mR, mA, mG] = bulbMats[d.axis];
+      mR.color.copy(st.lamp === "red" ? redLamp : dimRed);
+      mA.color.copy(st.lamp === "amber" ? amberLamp : dimAmber);
+      mG.color.copy(st.lamp === "green" ? greenLamp : dimGreen);
+      const c = d.ctx;
+      c.fillStyle = "#05070a";
+      c.fillRect(0, 0, 128, 128);
+      c.strokeStyle = "#3a4148";
+      c.lineWidth = 6;
+      c.strokeRect(4, 4, 120, 120);
+      c.fillStyle = st.lamp === "green" ? "#1ff068" : st.lamp === "amber" ? "#ffbe14" : "#ff261b";
+      c.font = "900 76px Arial, sans-serif";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText(String(st.remain), 64, 68);
+      d.texture.needsUpdate = true;
     }
   };
 
@@ -624,11 +608,11 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
         const laneZ = Math.max(4.5, Math.min(6.5, gapZ - 2.2));
         for (let i = 1; i < cols; i++) {
           const x = left + gapX + i * plotW + (i - 0.5) * gapX;
-          B.box(asphalt, laneX, 0.14, cellD, x, 0.12, near + cellD / 2, 0, 12);
+          B.box(asphalt, laneX, 0.14, cellD, x, 0.10, near + cellD / 2, 0, 12);
         }
         for (let j = 1; j < rows; j++) {
           const z = near + gapZ + j * plotD + (j - 0.5) * gapZ;
-          B.box(asphalt, cellW, 0.14, laneZ, left + cellW / 2, 0.12, z, 0, 12);
+          B.box(asphalt, cellW, 0.14, laneZ, left + cellW / 2, 0.10, z, 0, 12);
         }
       }
       for (let i = 0; i < cols; i++) {
