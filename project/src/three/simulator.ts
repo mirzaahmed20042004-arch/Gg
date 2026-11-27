@@ -45,8 +45,8 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   const scene = new THREE.Scene();
   const sky = createSky();
   scene.add(sky.mesh, sky.celestial);
-  scene.fog = new THREE.Fog(0xd3e3ee, 140, 2600);
-  const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 2.5, 6200);
+  scene.fog = new THREE.Fog(0xd3e3ee, 160, 3400);
+  const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 2.5, 8200);
 
   // A procedural equirectangular environment gives metal, glass and wet surfaces stable PBR reflections.
   const environment = tex(512, 256, (ctx, w, h) => {
@@ -115,9 +115,13 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
   let last: SimState = { prompt: null, crouching: false, sitting: false, night: false, jet: false };
   const move = { x: 0, y: 0 };
   const allHeights = [...hall.heights, ...park.roofs];
-  const heightAt = (x: number, z: number) => {
+  const heightAt = (x: number, z: number, curY = y) => {
     let h = 0;
-    for (const r of allHeights) if (x > r[0] && x < r[1] && z > r[2] && z < r[3]) h = Math.max(h, r[4]);
+    for (const r of allHeights) {
+      if (x > r[0] && x < r[1] && z > r[2] && z < r[3] && r[4] <= curY + 2.6) {
+        h = Math.max(h, r[4]);
+      }
+    }
     return h;
   };
   const keys = new Set<string>();
@@ -328,10 +332,12 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
 
     if (!sit) {
       if (jet) {
-        // Flight has momentum and a lift axis, but still collides with every solid (walls, trees, roofs).
+        // Flight has momentum and a lift axis, but still collides with every solid (walls, roofs, ceiling).
         pos.x = clamp(pos.x + vel.x * dt, -WORLD_LIMIT, WORLD_LIMIT);
         pos.z = clamp(pos.z + vel.z * dt, -WORLD_LIMIT, WORLD_LIMIT);
-        y = clamp(y + vy * dt, heightAt(pos.x, pos.z), 1800);
+        const insideHall = inBox(hall.interior, pos.x, pos.z) && y < 1.86 + hall.interior.ceil;
+        const maxFlyY = insideHall ? 1.86 + hall.interior.ceil - 5.2 : 1800;
+        y = clamp(y + vy * dt, heightAt(pos.x, pos.z, y), maxFlyY);
         resolve(pos, y);
       } else {
         // Substep fast motion so narrow props cannot be tunnelled through.
@@ -348,14 +354,20 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
           resolve(pos, y);
           if (Math.abs(pos.z - oldZ) < Math.abs(vel.z * subDt) * 0.18) vel.z = 0;
         }
+        // Smoothly open the main hall doors if the player walks directly into the doorway.
+        if (!door.open && speed > 0.8 && y < 6 && Math.abs(pos.x - door.x) < 3.8 && Math.abs(pos.z - door.z) < 3.2) {
+          door.open = true;
+        }
       }
     }
-    const gy = heightAt(pos.x, pos.z);
+    const gy = heightAt(pos.x, pos.z, y);
     if (jet) {
       grounded = false;
     } else if (!grounded) {
       vy = Math.max(-55, vy - 58 * dt);
       y += vy * dt;
+      const ceilY = inBox(hall.interior, pos.x, pos.z) && y < 1.86 + hall.interior.ceil ? 1.86 + hall.interior.ceil - 5.2 : Infinity;
+      if (y > ceilY) { y = ceilY; if (vy > 0) vy = 0; }
       if (y <= gy) { land = Math.min(1, -vy / 24); y = gy; vy = 0; grounded = true; }
     } else {
       y = damp(y, gy, 11, dt);
@@ -544,10 +556,14 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
     nearSeat = null;
     if (sit) prompt = sit.leaving ? null : "Stand up";
     else if (grounded) {
-      if (Math.hypot(pos.x - door.x, pos.z - door.z) < 10.5) prompt = door.open ? "Close door" : "Open door";
+      if (y < 12 && Math.hypot(pos.x - door.x, pos.z - door.z) < 10.5) prompt = door.open ? "Close door" : "Open door";
       else {
         let best = 4.7;
-        for (const s of seats) { const d = Math.hypot(s.x - pos.x, s.z - pos.z); if (d < best) { best = d; nearSeat = s; } }
+        for (const s of seats) {
+          if (Math.abs(y - s.y) > 3.5) continue;
+          const d = Math.hypot(s.x - pos.x, s.z - pos.z);
+          if (d < best) { best = d; nearSeat = s; }
+        }
         if (nearSeat) prompt = "Sit";
       }
     }
@@ -568,12 +584,12 @@ export function createSimulator(host: HTMLElement, opts: SimOptions = {}): SimAp
     const skyLookHeight = Math.max(0, 0.18 - camPitch) * 11;
     // Keep the player centred at altitude instead of aiming far below a flying avatar.
     camTarget.y = damp(camTarget.y, 4.4 + y - crouchW * 1.0 - sitDrop + skyLookHeight, 8, dt);
-    const inside = inBox(hall.interior, pos.x, pos.z);
+    const inside = inBox(hall.interior, pos.x, pos.z) && y < 1.86 + hall.interior.ceil;
     const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
     let rOk = 3;
     for (let r = inside ? Math.min(camR, 15) : camR; r > 3; r -= 0.7) {
       const cx = camTarget.x + Math.sin(camYaw) * cp * r, cz = camTarget.z + Math.cos(camYaw) * cp * r, cy = camTarget.y + sp * r;
-      if (inside ? inBox(hall.interior, cx, cz, -1.3) && cy < hall.interior.ceil - 1.2 : !inBox(hall.outer, cx, cz)) { rOk = r; break; }
+      if (inside ? inBox(hall.interior, cx, cz, -1.3) && cy < 1.86 + hall.interior.ceil - 1.2 : !(inBox(hall.outer, cx, cz) && cy < 53)) { rOk = r; break; }
     }
     camDist = damp(camDist, rOk, rOk < camDist ? 20 : 3.5, dt);
     camera.position.set(camTarget.x + Math.sin(camYaw) * cp * camDist, Math.max(0.8, camTarget.y + sp * camDist), camTarget.z + Math.cos(camYaw) * cp * camDist);

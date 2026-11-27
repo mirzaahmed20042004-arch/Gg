@@ -214,38 +214,36 @@ export function createSky(): Sky {
 }
 
 /* ------------------------------ open world ------------------------------ */
-const CELL = 200; // neighbourhood block pitch
-const ROAD_W = 18;
-const GRID = 24; // boundary-to-boundary is just under 10 km
-const EDGE = GRID * CELL + 130;
+const CELL = 260; // enlarged block pitch so all double roads keep spacious blocks & park grass
+const DOUBLE_ROAD_W = 32;
+const GRID = 24; // ~12.9 km x 12.9 km world
+const EDGE = GRID * CELL + 170;
 export const WORLD_LIMIT = EDGE + 23;
 
 const lineOffset = (i: number, phase: number) =>
   i === GRID ? 0 : Math.sin(i * 1.71 + phase) * 10 + Math.sin(i * 0.47 + phase) * 4;
 const hx = Array.from({ length: GRID * 2 + 1 }, (_, i) => 100 + (i - GRID) * CELL + lineOffset(i, 0.4));
 const hz = Array.from({ length: GRID * 2 + 1 }, (_, i) =>
-  i === GRID + 1 ? 92 : -108 + (i - GRID) * CELL + lineOffset(i, 1.9)
+  i === GRID + 1 ? 96 : -108 + (i - GRID) * CELL + lineOffset(i, 1.9)
 );
-const carriagewayWidth = (index: number) => index % 12 === 0 ? 46 : index % 4 === 0 ? 32 : index % 2 === 0 ? ROAD_W : 14;
+// Every road across the entire map is a wide double road (no single roads anywhere).
+const carriagewayWidth = (index: number) => (index % 12 === 0 ? 46 : DOUBLE_ROAD_W);
 const halfX = hx.map((_, i) => carriagewayWidth(i));
-const halfZ = hz.map((_, i) => (i === GRID + 1 ? 24 : carriagewayWidth(i)));
+const halfZ = hz.map((_, i) => (i === GRID + 1 ? DOUBLE_ROAD_W : carriagewayWidth(i)));
 
-/** Grid indices of the 4 uninterrupted perimeter roads bounding Frere Hall Park. */
+/** Grid indices of the 4 uninterrupted perimeter double roads bounding Frere Hall Park. */
 const PARK_XI_MIN = 21;
 const PARK_XI_MAX = 26;
 const PARK_ZI_MIN = 22;
 const PARK_ZI_MAX = 25;
 
-/** Exact rectangular park bounds ending precisely at the inner edges of the 4 perimeter roads. */
+/** Exact rectangular park bounds ending precisely at the inner edges of the 4 perimeter double roads. */
 export const PARK_BOUNDS = {
   minX: hx[PARK_XI_MIN] + halfX[PARK_XI_MIN] / 2,
   maxX: hx[PARK_XI_MAX] - halfX[PARK_XI_MAX] / 2,
   minZ: hz[PARK_ZI_MIN] + halfZ[PARK_ZI_MIN] / 2,
   maxZ: hz[PARK_ZI_MAX] - halfZ[PARK_ZI_MAX] / 2,
 };
-
-const inParkRect = (x: number, z: number, m = 0) =>
-  x > PARK_BOUNDS.minX - m && x < PARK_BOUNDS.maxX + m && z > PARK_BOUNDS.minZ - m && z < PARK_BOUNDS.maxZ + m;
 
 function freeRuns(start: number, end: number, cuts: Array<[number, number]>) {
   const sorted = cuts.map(([a, b]) => [Math.max(start, a), Math.min(end, b)] as [number, number])
@@ -330,12 +328,12 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
   // Street lights live only at Frere Hall (park lamps); the open world has none.
   const streetLights: { x: number; z: number; y: number }[] = [];
 
-  // ground plane for the whole world
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(10000, 10000), grass);
+  // ground plane for the whole enlarged world (~14 km x 14 km)
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), grass);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.08;
   ground.receiveShadow = true;
-  (ground.material as THREE.MeshStandardMaterial).map!.repeat.set(700, 700);
+  (ground.material as THREE.MeshStandardMaterial).map!.repeat.set(980, 980);
   scene.add(ground);
 
   const B = new Batch();
@@ -626,24 +624,13 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       const far = hz[iz + 1] - halfZ[iz + 1] / 2;
       const cellW = right - left;
       const cellD = far - near;
-      // Vary parcel density block to block instead of stamping one repetitive subdivision.
+      // Vary parcel density block to block across the enlarged cells (no narrow single-lane sub-roads).
       const cols = (Math.abs(kx * 7 + kz * 3) % 5 === 0) ? 2 : 3;
       const rows = (Math.abs(kx * 5 - kz * 11) % 6 === 0) ? 2 : 3;
-      const plotW = Math.min(68, (cellW - (cols + 1) * 9) / cols);
-      const plotD = Math.min(68, (cellD - (rows + 1) * 9) / rows);
+      const plotW = Math.min(82, (cellW - (cols + 1) * 14) / cols);
+      const plotD = Math.min(82, (cellD - (rows + 1) * 14) / rows);
       const gapX = (cellW - cols * plotW) / (cols + 1);
       const gapZ = (cellD - rows * plotD) / (rows + 1);
-      // Short local lanes connect each parcel row directly to its surrounding streets.
-      const laneX = Math.max(4.5, Math.min(6.5, gapX - 2.2));
-      const laneZ = Math.max(4.5, Math.min(6.5, gapZ - 2.2));
-      for (let i = 1; i < cols; i++) {
-        const x = left + gapX + i * plotW + (i - 0.5) * gapX;
-        B.box(asphalt, laneX, 0.14, cellD, x, 0.10, near + cellD / 2, 0, 12);
-      }
-      for (let j = 1; j < rows; j++) {
-        const z = near + gapZ + j * plotD + (j - 0.5) * gapZ;
-        B.box(asphalt, cellW, 0.14, laneZ, left + cellW / 2, 0.10, z, 0, 12);
-      }
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
           const x = left + gapX + plotW / 2 + i * (plotW + gapX);
@@ -658,35 +645,8 @@ export function buildOpenWorld(scene: THREE.Scene, colliders: Collider[]) {
       }
     }
   }
-  addWorldInstances(scene, plotG, new THREE.MeshStandardMaterial({ roughness: 1 }), plots, 800, false, true);
-  /* ---------- scattered street trees along the colony lanes ---------- */
-  const trunkG = new THREE.CylinderGeometry(0.55, 0.95, 9, 7);
-  const crownG = new THREE.IcosahedronGeometry(1, 1);
-  const nTrees = 520;
-  const trunkInstances: WorldInstance[] = [];
-  const crownInstances: WorldInstance[] = [];
-  const up = new THREE.Vector3(0, 1, 0);
-  for (let i = 0; i < nTrees; i++) {
-    const axis = r() > 0.5;
-    const line = Math.floor(r() * (2 * GRID)) - GRID;
-    const along = -EDGE + r() * 2 * EDGE;
-    const roadIndex = line + GRID;
-    const roadWidth = axis ? halfZ[roadIndex] : halfX[roadIndex];
-    const off = (roadWidth / 2 + 4.2) * (r() > 0.5 ? 1 : -1);
-    const x = axis ? along : hx[roadIndex] + off;
-    const z = axis ? hz[roadIndex] + off : along;
-    if (inParkRect(x, z, 6)) { i--; continue; }
-    const s = 0.85 + r() * 0.6;
-    m4.compose(new THREE.Vector3(x, 4.5 * s, z), new THREE.Quaternion(), new THREE.Vector3(s, s, s));
-    trunkInstances.push({ matrix: m4.clone() });
-    colliders.push(circleCol(x, z, 1.35 * s, 22 * s));
-    for (let k = 0; k < 2; k++) {
-      m4.compose(new THREE.Vector3(x + (r() - 0.5) * 2 * s, (10.5 + k * 3.4) * s, z + (r() - 0.5) * 2 * s), new THREE.Quaternion().setFromAxisAngle(up, r() * 6.28), new THREE.Vector3(4.6 * s, 3.5 * s, 4.6 * s));
-      crownInstances.push({ matrix: m4.clone() });
-    }
-  }
-  addWorldInstances(scene, trunkG, std(0x5b4330, 0.95), trunkInstances, 800, true, true);
-  addWorldInstances(scene, crownG, std(0x3d7a35, 0.95, { flatShading: true }), crownInstances, 800, true, true);
+  addWorldInstances(scene, plotG, new THREE.MeshStandardMaterial({ roughness: 1 }), plots, 900, false, true);
+  // Trees removed across the entire map as requested.
 
   /* ---------- boundary walls at the map edges ---------- */
   const wallM = mapped(tex(256, 256, (c, w, h) => speckle(c, w, h, "#c9bda2", ["#b3a68b", "#d8cdb4"], 3000, 6, 15)), 0.92);

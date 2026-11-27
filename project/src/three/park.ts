@@ -28,13 +28,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     c.strokeStyle = "rgba(80,68,48,0.5)"; c.lineWidth = 2;
     for (let y = 0; y < h; y += 64) for (let x = (y / 64) % 2 ? -64 : 0; x < w; x += 128) c.strokeRect(x, y, 128, 64);
   }), 0.95);
-  const barkM = mapped(tex(128, 256, (c, w, h) => {
-    speckle(c, w, h, "#5b4330", ["#3e2c1e", "#75593f", "#2f2116"], 900, 4, 12);
-    const r = rng(3);
-    for (let i = 0; i < 60; i++) { c.fillStyle = `rgba(25,15,8,${0.2 + r() * 0.3})`; c.fillRect(r() * w, r() * h, 2 + r() * 3, 20 + r() * 60); }
-  }), 1);
   const hedgeM = mapped(tex(128, 128, (c, w, h) => speckle(c, w, h, "#2f6230", ["#224a24", "#40793c", "#18381a"], 2600, 5, 5)), 1);
-  const leafM = [0x3f7d34, 0x2f6a2c, 0x558f3a].map((c) => std(c, 0.95, { flatShading: true }));
   const stoneM = std(0xc9bfa6, 0.9);
   const iron = std(0x1f2428, 0.55, { metalness: 0.6 });
   const woodM = std(0x7a5230, 0.75);
@@ -47,17 +41,17 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   const G = new Batch();
   const flat = (m: THREE.Material, w: number, d: number, x: number, z: number, y: number, tile: number) =>
     G.add(m, tilePlane(w, d, tile), x, y, z, [-Math.PI / 2, 0, 0]);
-  // One seamless rectangular lawn extending across front, back, left & right right up to all 4 perimeter roads.
+  // One seamless rectangular lawn extending across front, back, left & right right up to all 4 perimeter double roads.
   flat(lawnM, PW, PD, PCX, PCZ, 0.02, 16);
   const F = 0.13;
   flat(paverM, 80, 58, 0, -27.5, 0.04 + F, 9);
   flat(paverM, 20, 70, 0, 35, 0.04 + F, 9);
   flat(paverM, 244, 10, 0, 30, 0.035 + F, 9);
   G.add(paverM, new THREE.CircleGeometry(18, 40), 0, 0.05 + F, 30, [-Math.PI / 2, 0, 0], [1, 1, 1]);
-  // Front promenade spans the full width of the park and terminates cleanly at the z = 80 perimeter road edge.
+  // Front promenade spans the full width of the park and terminates cleanly at the z = 80 perimeter double road edge.
   flat(paverM, PW, 12, PCX, 74, 0.045 + F, 9);
-  for (const z of [80.35, 103.65]) flat(white, PW, 0.42, PCX, z, 0.195, 1);
-  for (let x = -8; x <= 8; x += 3.2) flat(white, 1.7, 21, x, 92, 0.205, 1);
+  for (const z of [80.4, 111.6]) flat(white, PW, 0.42, PCX, z, 0.195, 1);
+  for (let x = -8; x <= 8; x += 3.2) flat(white, 1.7, 29, x, 96, 0.205, 1);
   G.build(scene, false, true);
 
   /* ---------- solid props ---------- */
@@ -124,20 +118,42 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   }
   const bollard = lathe([[0.55, 0], [0.5, 2.6], [0.72, 2.8], [0.5, 3.2], [0.01, 3.35]], 8);
   for (const x of [-9.4, -3.1, 3.1, 9.4]) { P.add(iron, bollard, x, 0, 68.6); colliders.push(circleCol(x, 68.6, 0.7)); }
-  P.box(stoneM, 17, 5.4, 1.6, -27, 2.7, 62);
-  colliders.push(boxCol(-27, 62, 17, 1.9));
+  P.box(stoneM, 17.6, 5.8, 1.6, -27, 2.9, 62);
+  P.box(stoneM, 18.4, 0.45, 2.0, -27, 6.0, 62);
+  colliders.push(boxCol(-27, 62, 18.4, 2.2, undefined, 6.2));
   const signM = new THREE.MeshStandardMaterial({
-    map: tex(1024, 320, (c, w, h) => {
-      c.fillStyle = "#143528"; c.fillRect(0, 0, w, h);
-      c.strokeStyle = "#d3b05e"; c.lineWidth = 10; c.strokeRect(10, 10, w - 20, h - 20);
-      c.textAlign = "center"; c.fillStyle = "#f1dfa6"; c.font = "700 110px Georgia, serif"; c.fillText("FRERE HALL", w / 2, 132);
-      c.fillStyle = "#d3b05e"; c.font = "600 44px Georgia, serif";
-      c.fillText("Liaquat National Library  ·  Galerie Sadequain", w / 2, 208);
-      c.fillText("Bagh-e-Jinnah, Karachi", w / 2, 270);
+    map: tex(1024, 384, (c, w, h) => {
+      c.fillStyle = "#143528";
+      c.fillRect(0, 0, w, h);
+      c.strokeStyle = "#d3b05e";
+      c.lineWidth = 10;
+      c.strokeRect(14, 14, w - 28, h - 28);
+      c.strokeStyle = "rgba(241,223,166,0.45)";
+      c.lineWidth = 3;
+      c.strokeRect(28, 28, w - 56, h - 56);
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      const fitText = (text: string, weight: string, startPx: number, minPx: number, yPos: number, color: string) => {
+        let px = startPx;
+        do {
+          c.font = `${weight} ${px}px Georgia, 'Times New Roman', serif`;
+          if (c.measureText(text).width <= w - 112) break;
+          px -= 2;
+        } while (px > minPx);
+        c.fillStyle = color;
+        c.fillText(text, w / 2, yPos, w - 112);
+      };
+      fitText("FRERE HALL", "700", 96, 52, 112, "#f8e8b8");
+      fitText("Liaquat National Library  ·  Galerie Sadequain", "600", 38, 24, 224, "#e6c675");
+      fitText("Bagh-e-Jinnah, Karachi  ·  Est. 1865", "600", 34, 22, 304, "#f1dfa6");
     }, false),
-    roughness: 0.6,
+    roughness: 0.52,
   });
-  P.add(signM, new THREE.PlaneGeometry(15, 4.4), -27, 2.9, 62.82);
+  // Mount raised plaques well proud of both faces of the stone monument so text never clips or z-fights.
+  for (const s of [-1, 1] as const) {
+    P.box(iron, 15.6, 4.75, 0.22, -27, 2.95, 62 + s * 0.86);
+    P.add(signM, new THREE.PlaneGeometry(15.1, 4.4), -27, 2.95, 62 + s * 1.0, [0, s === 1 ? 0 : Math.PI, 0]);
+  }
 
   // fountain
   P.add(stoneM, lathe([[7.2, 0.3], [7.2, 1.5], [8.3, 1.7], [8.5, 1.2], [8.3, 0]], 28), 0, 0, 30);
@@ -168,101 +184,11 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     });
     colliders.push(boxCol(x, z, 16.4, 6.8, undefined, 5.6));
   };
-  car(-48, 84.6, 0xe9e6dd); car(60, 84.6, 0x8e1f25); car(30, 99.4, 0x1f3f6b);
+  car(-48, 84.8, 0xe9e6dd); car(60, 84.8, 0x8e1f25); car(30, 107.2, 0x1f3f6b);
 
-  // No buildings in front of Frere Hall (open view across the road).
+  // No buildings and no trees at Frere Hall / park as requested.
   const r = rng(42);
   const roofs: [number, number, number, number, number][] = [];
-
-  /* ---------- trees ---------- */
-  const trunkG = lathe([[1.75, 0], [1.2, 0.9], [0.95, 3], [0.85, 7], [0.92, 9.6], [0.55, 12.2]], 10, true);
-  const tp = trunkG.attributes.position;
-  for (let i = 0; i < tp.count; i++) {
-    const a = Math.atan2(tp.getZ(i), tp.getX(i));
-    const f = 1 + 0.13 * Math.sin(a * 3 + tp.getY(i) * 0.6) + 0.07 * Math.sin(a * 5 - tp.getY(i));
-    tp.setXYZ(i, tp.getX(i) * f, tp.getY(i), tp.getZ(i) * f);
-  }
-  trunkG.computeVertexNormals();
-  const branchG = lathe([[0.42, 0], [0.3, 2.6], [0.14, 5.8]], 6);
-  const blobs = [1, 2, 3].map((seed) => {
-    const g = new THREE.IcosahedronGeometry(1, 2);
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const f = 1 + 0.16 * Math.sin(p.getX(i) * 5 + seed) + 0.12 * Math.sin(p.getY(i) * 7 + seed * 2) + 0.1 * Math.sin(p.getZ(i) * 6 + seed * 3);
-      p.setXYZ(i, p.getX(i) * f, p.getY(i) * f, p.getZ(i) * f);
-    }
-    g.computeVertexNormals();
-    return g;
-  });
-  const tree = (x: number, z: number, s: number, solid: boolean) => {
-    P.at(x, 0, z, r() * 6.28, () => {
-      P.add(barkM, trunkG, 0, 0, 0, [0, 0, (r() - 0.5) * 0.12], [s * (0.9 + r() * 0.3), s, s * (0.9 + r() * 0.3)]);
-      for (let i = 0; i < 3; i++) {
-        const a = i * 2.1 + r();
-        P.add(barkM, branchG, 0, 8.6 * s, 0, [0.85 * Math.cos(a), 0, 0.85 * Math.sin(a)], [s, s, s]);
-      }
-      for (let i = 0; i < 8; i++) {
-        const a = i * 0.9 + r() * 0.5;
-        const d = i === 0 ? 0 : (2.6 + r() * 2.2) * s;
-        const sc = (3.4 + r() * 1.8) * s;
-        P.add(leafM[i % 3], blobs[i % 3], Math.cos(a) * d, (13 + r() * 4.5 + (i === 0 ? 3 : 0)) * s, Math.sin(a) * d, [r() * 3, r() * 3, 0], [sc, sc * 0.82, sc]);
-      }
-    });
-    if (solid) colliders.push(circleCol(x, z, 1.5 * s, 24 * s));
-  };
-  const placed: [number, number][] = [];
-  for (let i = 0; i < 900 && placed.length < (mobile ? 34 : 50); i++) {
-    const x = (r() * 2 - 1) * 134, z = -122 + r() * 186;
-    if (paved(x, z, 6) || placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < 17)) continue;
-    placed.push([x, z]);
-    tree(x, z, 0.85 + r() * 0.5, true);
-  }
-  for (let i = 0; i < 22; i++) {
-    const a = (i / 22) * Math.PI * 1.5 + Math.PI * 0.75;
-    const tx = Math.cos(a) * 168;
-    const tz = -10 + Math.sin(a) * 150;
-    const ts = 1.35 + r() * 0.45;
-    if (tz > 58 || paved(tx, tz, 7) || placed.some(([px, pz]) => Math.hypot(px - tx, pz - tz) < 16)) continue;
-    placed.push([tx, tz]);
-    tree(tx, tz, ts, true);
-  }
-  for (const s of [-1, 1]) {
-    for (const tz of [-120, -70, -20]) {
-      placed.push([s * 134, tz]);
-      tree(s * 134, tz, 1.2, true);
-    }
-  }
-  for (const [tx, ts] of [[-70, 1.25], [0, 1.4], [70, 1.25]] as const) {
-    placed.push([tx, -132]);
-    tree(tx, -132, ts, true);
-  }
-
-  // Landscaped Bagh-e-Jinnah perimeter shade trees & outer lawn groves across the full rectangular park.
-  const rOuter = rng(9042);
-  for (let x = hxL + 18; x <= hxR - 18; x += 56) {
-    const tx = x + (rOuter() - 0.5) * 8;
-    const tz = hzB + 15 + rOuter() * 5;
-    placed.push([tx, tz]);
-    tree(tx, tz, 1.15 + rOuter() * 0.4, true);
-  }
-  for (const hxEdge of [hxL + 15, hxR - 15]) {
-    for (let z = hzB + 64; z <= 52; z += 56) {
-      const tx = hxEdge + (rOuter() - 0.5) * 5;
-      const tz = z + (rOuter() - 0.5) * 8;
-      if (paved(tx, tz, 7)) continue;
-      placed.push([tx, tz]);
-      tree(tx, tz, 1.15 + rOuter() * 0.4, true);
-    }
-  }
-  const targetOuter = placed.length + (mobile ? 48 : 85);
-  for (let i = 0; i < 1600 && placed.length < targetOuter; i++) {
-    const tx = hxL + 24 + rOuter() * (hxR - hxL - 48);
-    const tz = hzB + 24 + rOuter() * (56 - (hzB + 24));
-    if (Math.abs(tx) < 162 && tz > -138) continue; // preserve Frere Hall inner garden & front vista
-    if (paved(tx, tz, 8) || placed.some(([px, pz]) => Math.hypot(px - tx, pz - tz) < 30)) continue;
-    placed.push([tx, tz]);
-    tree(tx, tz, 0.95 + rOuter() * 0.55, true);
-  }
   P.build(scene);
 
   /* ---------- grass tufts + flowers (instanced) ---------- */

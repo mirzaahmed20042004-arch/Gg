@@ -330,7 +330,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
     win(B, winExt, 4.6, 9.5, TX + sx * 7.94, 27, TZ + cz * 7.94, a);
     win(B, winExt, 4.2, 13, TX + sx * 7.29, 48.5, TZ + cz * 7.29, a);
   }
-  colliders.push(circleCol(TX, TZ, 9.3));
+  colliders.push(circleCol(TX, TZ, 9.3, 99));
 
   // ---- entrance porch ----
   const arch3 = [-9, 0, 9].map((x) => ({ x, w: 6.4, spring: 8, apex: 12.2 }));
@@ -338,12 +338,12 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   for (const s of [-1, 1]) {
     B.add(stone, archWall(12, 15, 2, [{ x: 0, w: 7, spring: 8, apex: 12.2 }], T), s * 13, 0, -48, [0, Math.PI / 2, 0]);
     B.add(red, prism(0.01, 1.4, 4.5, 4), s * 13, 19.6, -41);
-    colliders.push(boxCol(s * 13, -52.9, 2.2, 2.6), boxCol(s * 13, -42.2, 2.2, 4.6), boxCol(s * 4.5, -41, 2.8, 2.2));
+    colliders.push(boxCol(s * 13, -52.9, 2.2, 2.6, undefined, 17), boxCol(s * 13, -42.2, 2.2, 4.6, undefined, 17), boxCol(s * 4.5, -41, 2.6, 2.2, undefined, 17));
   }
   B.box(stone, 29, 1.4, 15, 0, 15.7, -47, 0, T);
   B.box(red, 29.6, 0.7, 15.4, 0, 16.6, -47);
   for (let x = -12.6; x <= 12.7; x += 4.2) B.box(stone, 2.4, 1.6, 1.6, x, 17.7, -40.6, 0, T);
-  win(B, new THREE.MeshStandardMaterial({ map: signTex("FRERE HALL", "KARACHI  ·  EST. 1865"), roughness: 0.6 }), 15, 2.35, 0, 13.6, -39.94, 0);
+  win(B, new THREE.MeshStandardMaterial({ map: signTex("FRERE HALL", "KARACHI  ·  EST. 1865"), roughness: 0.55 }), 15, 2.35, 0, 13.6, -39.84, 0);
 
   // ---- exterior windows ----
   for (const x of [-30, -18, 18, 30, 42, 53]) win(B, winExt, 6.5, 12, x, 8.6, -53.94, 0);
@@ -390,7 +390,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
     return pivot;
   };
   const door: Door = { left: makeLeaf(1), right: makeLeaf(-1), open: false, t: 0, x: 0, z: -55 };
-  colliders.push(boxCol(0, -55, 9, 1.4, () => door.t < 0.55));
+  colliders.push(boxCol(0, -55, 9, 1.4, () => door.t < 0.55, 10.5));
   const tymp = new THREE.Mesh(archPanel(9, 0, 4.5), new THREE.MeshStandardMaterial({ color: 0x20363a, roughness: 0.25, metalness: 0.3, side: THREE.DoubleSide }));
   tymp.position.set(0, 10.3, -55);
   scene.add(tymp);
@@ -418,7 +418,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
     I.box(stone, 2.4, 18, 2.4, x, 9, z, 0, T);
     I.box(red, 3.2, 0.8, 3.2, x, 15.4, z);
     I.box(grey, 3.2, 1.2, 3.2, x, 0.6, z);
-    colliders.push(boxCol(x, z, 2.8, 2.8));
+    colliders.push(boxCol(x, z, 2.8, 2.8, undefined, 20));
   }
 
   // bookshelves
@@ -432,11 +432,11 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
       if (double) I.add(bookMats[bi++ % 3], new THREE.PlaneGeometry(10.4, 11.2), 0, 6.1, -1.22, [0, Math.PI, 0]);
     });
   for (const x of [-44, -33, -22, -11, 0, 11, 22, 33, 44]) shelf(x, -98.7, 0, false);
-  colliders.push(boxCol(0, -98.7, 99, 2.6));
+  colliders.push(boxCol(0, -98.7, 99, 2.6, undefined, 16));
   for (const s of [-1, 1]) for (const z of [-64, -72, -80, -88]) {
     shelf(s * 46.5, z, 0, true);
     shelf(s * 35.5, z, 0, true);
-    colliders.push(boxCol(s * 41, z, 22.2, 2.6));
+    colliders.push(boxCol(s * 41, z, 22.2, 2.6, undefined, 16));
   }
 
   // reading tables, chairs, lamps and loose books
@@ -452,7 +452,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
       for (const sx of [-0.95, 0.95]) { I.box(wood, 0.26, 4.2, 0.26, sx, 2.1, -1.0); I.box(wood, 0.26, 1.5, 0.26, sx, 0.75, 0.95); }
     });
     seats.push({ x, z, y: 1.73 + 1.86, yaw });
-    colliders.push(circleCol(x, z, 1.05));
+    colliders.push(circleCol(x, z, 1.05, 6.2));
   };
   for (const tx of [-13, 13]) for (const tz of [-69, -85]) {
     I.at(tx, 0, tz, 0, () => {
@@ -466,7 +466,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
       I.box(pal[2], 2.6, 0.06, 1.8, 3, 3.12, -0.9);
       I.box(pal[0], 1.5, 0.3, 1.1, 2.4, 3.25, 1.4, 0.5);
     });
-    colliders.push(boxCol(tx, tz, 10.4, 5.2));
+    colliders.push(boxCol(tx, tz, 10.4, 5.2, undefined, 5.6));
     for (const sx of [-2.7, 2.7]) { chair(tx + sx, tz + 3.9, Math.PI); chair(tx + sx, tz - 3.9, 0); }
   }
 
@@ -477,12 +477,12 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   I.add(std(0x2f6f8f, 0.5), new THREE.IcosahedronGeometry(1.1, 2), 31, 5.6, -61);
   I.box(darkWood, 9, 7, 2.6, -26, 3.5, -58);
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) I.box(brass, 0.5, 0.16, 0.12, -29 + i * 2, 1.3 + j * 1.5, -56.66);
-  colliders.push(boxCol(26, -61, 14.6, 3.6), boxCol(-26, -58, 9, 2.8));
+  colliders.push(boxCol(26, -61, 14.6, 3.6, undefined, 7.5), boxCol(-26, -58, 9, 2.8, undefined, 9.2));
   const leaf = std(0x2f6b35, 0.85, { flatShading: true });
   for (const s of [-1, 1]) {
     I.add(std(0x9c5b3b, 0.8), lathe([[0.7, 0], [1.0, 1.3], [1.15, 1.9], [1.0, 2]], 10), s * 9, 0, -58.6);
     for (let i = 0; i < 4; i++) I.add(leaf, new THREE.IcosahedronGeometry(1, 1), s * 9 + Math.sin(i * 2) * 0.6, 3 + i * 0.9, -58.6 + Math.cos(i * 2) * 0.6, [i, i, 0], [1.1, 1.3, 1.1]);
-    colliders.push(circleCol(s * 9, -58.6, 1.3));
+    colliders.push(circleCol(s * 9, -58.6, 1.3, 8.2));
   }
 
   // long tube lights — visibly lit
@@ -527,8 +527,9 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
       heights.push([cx - w, cx + w, -27 - (i + 1) * STEP_D, -27 - i * STEP_D, ((i + 1) * 1.86) / 6]);
     }
   }
-  // Roof slope (ridge along x at z=-78): stepped heights so the character can stand on it.
-  heights.push([-60, 60, -85, -71, 51.7], [-60, 60, -98, -85, 47], [-60, 60, -71, -58, 47], [-60, 60, -105, -98, 41], [-60, 60, -58, -51, 41]);
+  // Roof slope (ridge along x at z=-78): stepped heights so a flying character landing from above can stand on it,
+  // while walking characters at terrace/interior level (y = 1.86) pass cleanly underneath into the library.
+  heights.push([-14.8, 14.8, -54.5, -39.5, 17.0], [-60, 60, -85, -71, 51.7], [-60, 60, -98, -85, 47], [-60, 60, -71, -58, 47], [-60, 60, -105, -98, 41], [-60, 60, -58, -51, 41]);
   return {
     door,
     heights,
@@ -536,6 +537,6 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
     interiorLights,
     tubeMaterial: tubeM,
     interior: { minX: -56, maxX: 56, minZ: -100, maxZ: -56, ceil: 19.4 },
-    outer: { minX: -86, maxX: 86, minZ: -118, maxZ: -31 },
+    outer: { minX: -59, maxX: 59, minZ: -103, maxZ: -53.5 },
   };
 }
