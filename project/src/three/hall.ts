@@ -253,9 +253,9 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   const darkWood = mapped(woodTex("#3a2414", 8), 0.6);
   const brass = std(0xc9a24b, 0.35, { metalness: 0.8 });
   const dark = std(0x14181a, 0.8);
-  const winExt = new THREE.MeshStandardMaterial({ map: windowTex(false), alphaTest: 0.5, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-  const winInt = new THREE.MeshBasicMaterial({ map: windowTex(true), alphaTest: 0.5, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-  const rose = new THREE.MeshStandardMaterial({ map: roseTex(), alphaTest: 0.5, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const winExt = new THREE.MeshStandardMaterial({ map: windowTex(false), alphaTest: 0.5, roughness: 0.5 });
+  const winInt = new THREE.MeshBasicMaterial({ map: windowTex(true), alphaTest: 0.5, toneMapped: false });
+  const rose = new THREE.MeshStandardMaterial({ map: roseTex(), alphaTest: 0.5, roughness: 0.5 });
   const T = 12; // stone tile size in world units
 
   const B = new Batch();
@@ -299,20 +299,14 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   const gable = new THREE.Shape();
   gable.moveTo(-25, 0); gable.lineTo(25, 0); gable.lineTo(0, 13.9); gable.closePath();
   for (const s of [-1, 1]) {
-    B.add(stonePlain, new THREE.ShapeGeometry(gable), s * 60.12, 36.6, -78, [0, (s * Math.PI) / 2, 0]);
-    win(B, rose, 8.5, 8.5, s * 60.28, 42, -78, (s * Math.PI) / 2);
+    B.add(stonePlain, new THREE.ShapeGeometry(gable), s * 60.05, 36.6, -78, [0, (s * Math.PI) / 2, 0]);
+    win(B, rose, 8.5, 8.5, s * 60.15, 42, -78, (s * Math.PI) / 2);
   }
   B.box(red, 121, 0.8, 1.2, 0, 51.7, -78);
   B.box(stone, 6, 7, 6, 14, 53.5, -78, 0, T);
   B.box(red, 6.8, 0.8, 6.8, 14, 57.2, -78);
   B.add(roofPlain, prism(0.01, 3.4, 27, 8), 14, 71, -78);
   B.add(brass, new THREE.IcosahedronGeometry(0.7, 1), 14, 85, -78);
-  // Solid continuous pitched roof + central lantern + flèche spire (impossible to fall through into hall!)
-  colliders.push(
-    boxCol(0, -78, 121.0, 54.6, undefined, 52.0, 35.2, (_x, z) => 36.6 + 15.0 * Math.max(0, 1 - Math.abs(z + 78) / 27)),
-    boxCol(14, -78, 6.8, 6.8, undefined, 57.6, 50.0),
-    circleCol(14, -78, 3.3, 85.2, 57.0, (x, z) => 57.6 + 27.0 * Math.max(0, 1 - Math.hypot(x - 14, z + 78) / 3.3))
-  );
 
   // ---- octagonal clock tower ----
   const TX = -50, TZ = -46;
@@ -332,16 +326,11 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   B.add(brass, new THREE.IcosahedronGeometry(0.8, 1), TX, 97.6, TZ);
   for (const a of [-Math.PI / 2, -Math.PI / 4, 0, Math.PI / 4, Math.PI / 2]) {
     const sx = Math.sin(a), cz = Math.cos(a);
-    win(B, winExt, 4.6, 9.5, TX + sx * 8.05, 9, TZ + cz * 8.05, a);
-    win(B, winExt, 4.6, 9.5, TX + sx * 8.05, 27, TZ + cz * 8.05, a);
-    win(B, winExt, 4.2, 13, TX + sx * 7.42, 48.5, TZ + cz * 7.42, a);
+    win(B, winExt, 4.6, 9.5, TX + sx * 7.94, 9, TZ + cz * 7.94, a);
+    win(B, winExt, 4.6, 9.5, TX + sx * 7.94, 27, TZ + cz * 7.94, a);
+    win(B, winExt, 4.2, 13, TX + sx * 7.29, 48.5, TZ + cz * 7.29, a);
   }
-  colliders.push(
-    circleCol(TX, TZ, 9.2, 37.2),
-    circleCol(TX, TZ, 8.3, 61.0, 36.5),
-    circleCol(TX, TZ, 8.7, 72.0, 60.0),
-    circleCol(TX, TZ, 9.1, 97.5, 71.5, (x, z) => 72.0 + 25.0 * Math.max(0, 1 - Math.hypot(x - TX, z - TZ) / 9.1))
-  );
+  colliders.push(circleCol(TX, TZ, 9.3, 99));
 
   // ---- entrance porch ----
   const arch3 = [-9, 0, 9].map((x) => ({ x, w: 6.4, spring: 8, apex: 12.2 }));
@@ -353,16 +342,15 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   }
   B.box(stone, 29, 1.4, 15, 0, 15.7, -47, 0, T);
   B.box(red, 29.6, 0.7, 15.4, 0, 16.6, -47);
-  colliders.push(boxCol(0, -47.2, 29.6, 15.4, undefined, 17.0, 14.6));
   for (let x = -12.6; x <= 12.7; x += 4.2) B.box(stone, 2.4, 1.6, 1.6, x, 17.7, -40.6, 0, T);
-  win(B, new THREE.MeshStandardMaterial({ map: signTex("FRERE HALL", "KARACHI  ·  EST. 1865"), roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), 15, 2.35, 0, 13.6, -39.78, 0);
+  win(B, new THREE.MeshStandardMaterial({ map: signTex("FRERE HALL", "KARACHI  ·  EST. 1865"), roughness: 0.55 }), 15, 2.35, 0, 13.6, -39.84, 0);
 
   // ---- exterior windows ----
-  for (const x of [-30, -18, 18, 30, 42, 53]) win(B, winExt, 6.5, 12, x, 8.6, -53.82, 0);
-  for (const x of [-30, -18, -7.5, 7.5, 18, 30, 42, 53]) win(B, winExt, 6, 12, x, 27, -53.82, 0);
-  win(B, winExt, 7.5, 14, 0, 27, -53.82, 0);
-  for (const x of [-42, -30, -18, -6, 6, 18, 30, 42]) for (const y of [8.6, 27]) win(B, winExt, 6.5, 12, x, y, -102.18, Math.PI);
-  for (const z of [-60, -72, -84, -96]) for (const y of [8.6, 27]) for (const s of [-1, 1]) win(B, winExt, 6.5, 12, s * 58.18, y, z, (s * Math.PI) / 2);
+  for (const x of [-30, -18, 18, 30, 42, 53]) win(B, winExt, 6.5, 12, x, 8.6, -53.94, 0);
+  for (const x of [-30, -18, -7.5, 7.5, 18, 30, 42, 53]) win(B, winExt, 6, 12, x, 27, -53.94, 0);
+  win(B, winExt, 7.5, 14, 0, 27, -53.94, 0);
+  for (const x of [-42, -30, -18, -6, 6, 18, 30, 42]) for (const y of [8.6, 27]) win(B, winExt, 6.5, 12, x, y, -102.06, Math.PI);
+  for (const z of [-60, -72, -84, -96]) for (const y of [8.6, 27]) for (const s of [-1, 1]) win(B, winExt, 6.5, 12, s * 58.06, y, z, (s * Math.PI) / 2);
   /* ---------------- raised terrace + grand staircases ---------------- */
   const TR = 1.86;
   B.box(grey, 172, TR, 84, 0, TR / 2, -76, 0, T); // terrace platform
@@ -381,7 +369,6 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   for (const s of [-1, 1]) {
     B.box(stone, 3, TR + 1.1, 24, s * 20.6, (TR + 1.1) / 2, -34, 0, T);
     B.box(stone, 3, TR + 1.1, 24, s * 71.2, (TR + 1.1) / 2, -34, 0, T);
-    colliders.push(boxCol(s * 20.6, -34, 3.0, 24.0, undefined, TR + 1.1), boxCol(s * 71.2, -34, 3.0, 24.0, undefined, TR + 1.1));
   }
   B.build(scene);
 
@@ -403,7 +390,7 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
     return pivot;
   };
   const door: Door = { left: makeLeaf(1), right: makeLeaf(-1), open: false, t: 0, x: 0, z: -55 };
-  colliders.push(boxCol(0, -55, 9, 1.4, () => Math.abs(door.t) < 0.42, 10.5));
+  colliders.push(boxCol(0, -55, 9, 1.4, () => door.t < 0.55, 10.5));
   const tymp = new THREE.Mesh(archPanel(9, 0, 4.5), new THREE.MeshStandardMaterial({ color: 0x20363a, roughness: 0.25, metalness: 0.3, side: THREE.DoubleSide }));
   tymp.position.set(0, 10.3, -55);
   scene.add(tymp);
@@ -416,60 +403,56 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
   const IG = new THREE.Group();
   IG.position.y = 1.86;
   scene.add(IG);
-  const floorM = mapped(parquetTex(), 0.55, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  I.add(floorM, tilePlane(112, 44, 9), 0, 0.11, -78, [-Math.PI / 2, 0, 0]);
-  I.add(new THREE.MeshStandardMaterial({ map: rugTex(), roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), new THREE.PlaneGeometry(13, 34), 0, 0.18, -79, [-Math.PI / 2, 0, 0]);
+  const floorM = mapped(parquetTex(), 0.55);
+  I.add(floorM, tilePlane(112, 44, 9), 0, 0.06, -78, [-Math.PI / 2, 0, 0]);
+  I.add(new THREE.MeshStandardMaterial({ map: rugTex(), roughness: 0.95 }), new THREE.PlaneGeometry(13, 34), 0, 0.1, -79, [-Math.PI / 2, 0, 0]);
   I.box(std(0xe9dfc8, 0.95), 112, 1.5, 44, 0, 18.75, -78);
-  I.add(new THREE.MeshBasicMaterial({ map: muralTex(), toneMapped: false, color: 0xd8d8d8, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), new THREE.PlaneGeometry(46, 23), 0, 17.86, -78, [Math.PI / 2, 0, 0]);
+  I.add(new THREE.MeshBasicMaterial({ map: muralTex(), toneMapped: false, color: 0xd8d8d8 }), new THREE.PlaneGeometry(46, 23), 0, 17.94, -78, [Math.PI / 2, 0, 0]);
   for (let x = -48; x <= 48; x += 16) I.box(darkWood, 1.2, 1, 44, x, 17.6, -78);
-  win(I, new THREE.MeshBasicMaterial({ map: signTex("LIAQUAT NATIONAL LIBRARY", "70,000 VOLUMES  ·  FRERE HALL"), toneMapped: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), 30, 4.7, 0, 15, -99.5, 0);
-  for (const x of [-42, -30, -18, 18, 30, 42]) win(I, winInt, 6.2, 11.5, x, 8.6, -56.12, Math.PI);
-  for (const z of [-60, -68, -76, -84, -92]) for (const s of [-1, 1]) win(I, winInt, 5.6, 11.5, s * 55.82, 8.6, z, (-s * Math.PI) / 2);
+  win(I, new THREE.MeshBasicMaterial({ map: signTex("LIAQUAT NATIONAL LIBRARY", "70,000 VOLUMES  ·  FRERE HALL"), toneMapped: false }), 30, 4.7, 0, 15, -99.6, 0);
+  for (const x of [-42, -30, -18, 18, 30, 42]) win(I, winInt, 6.2, 11.5, x, 8.6, -55.94, Math.PI);
+  for (const z of [-60, -68, -76, -84, -92]) for (const s of [-1, 1]) win(I, winInt, 5.6, 11.5, s * 55.94, 8.6, z, (-s * Math.PI) / 2);
 
   // stone piers carrying the upper floor
   for (const x of [-26, 26]) for (const z of [-64, -78, -92]) {
     I.box(stone, 2.4, 18, 2.4, x, 9, z, 0, T);
     I.box(red, 3.2, 0.8, 3.2, x, 15.4, z);
     I.box(grey, 3.2, 1.2, 3.2, x, 0.6, z);
-    colliders.push(boxCol(x, z, 3.1, 3.1, undefined, TR + 18.0));
+    colliders.push(boxCol(x, z, 2.8, 2.8, undefined, 20));
   }
 
-  // bookshelves — solid & standable on top
-  const bookMats = [1, 2, 3].map((s) => new THREE.MeshStandardMaterial({ map: booksTex(s * 13), roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+  // bookshelves
+  const bookMats = [1, 2, 3].map((s) => new THREE.MeshStandardMaterial({ map: booksTex(s * 13), roughness: 0.8 }));
   let bi = 0;
   const shelf = (x: number, z: number, ry: number, double: boolean) =>
     I.at(x, 0, z, ry, () => {
       I.box(darkWood, 11, 12, 2.4, 0, 6, 0);
       I.box(darkWood, 11.5, 0.6, 3, 0, 12.3, 0);
-      I.add(bookMats[bi++ % 3], new THREE.PlaneGeometry(10.4, 11.2), 0, 6.1, 1.26);
-      if (double) I.add(bookMats[bi++ % 3], new THREE.PlaneGeometry(10.4, 11.2), 0, 6.1, -1.26, [0, Math.PI, 0]);
+      I.add(bookMats[bi++ % 3], new THREE.PlaneGeometry(10.4, 11.2), 0, 6.1, 1.22);
+      if (double) I.add(bookMats[bi++ % 3], new THREE.PlaneGeometry(10.4, 11.2), 0, 6.1, -1.22, [0, Math.PI, 0]);
     });
   for (const x of [-44, -33, -22, -11, 0, 11, 22, 33, 44]) shelf(x, -98.7, 0, false);
-  colliders.push(boxCol(0, -98.7, 99, 2.7, undefined, TR + 12.6));
+  colliders.push(boxCol(0, -98.7, 99, 2.6, undefined, 16));
   for (const s of [-1, 1]) for (const z of [-64, -72, -80, -88]) {
     shelf(s * 46.5, z, 0, true);
     shelf(s * 35.5, z, 0, true);
-    colliders.push(boxCol(s * 41, z, 22.4, 2.7, undefined, TR + 12.6));
+    colliders.push(boxCol(s * 41, z, 22.2, 2.6, undefined, 16));
   }
 
-  // reading tables, chairs, lamps and loose books — all solid, climbable, and chairs properly sit-able!
+  // reading tables, chairs, lamps and loose books
   const pal = [0x7b1e22, 0x1f3a5f, 0x275b3a, 0x8a6a1f, 0x4a2c5e].map((c) => std(c, 0.7));
   const page = std(0xf3ecd8, 0.9);
   const shade = new THREE.MeshStandardMaterial({ color: 0x1f6a4a, emissive: 0x2f8a5f, emissiveIntensity: 0.5, roughness: 0.4 });
   const r = rng(77);
-  let chairIdx = 0;
   const chair = (x: number, z: number, yaw: number) => {
-    const tag = `chair_${chairIdx++}`;
     I.at(x, 0, z, yaw, () => {
       I.box(wood, 2.2, 0.26, 2.2, 0, 1.6, 0);
       I.box(wood, 2.2, 0.5, 0.24, 0, 3.9, -1.0);
       I.box(wood, 2.2, 0.5, 0.24, 0, 2.9, -1.0);
       for (const sx of [-0.95, 0.95]) { I.box(wood, 0.26, 4.2, 0.26, sx, 2.1, -1.0); I.box(wood, 0.26, 1.5, 0.26, sx, 0.75, 0.95); }
     });
-    seats.push({ x, z, y: TR + 1.73, yaw, tag });
-    colliders.push(boxCol(x, z, 2.2, 2.2, undefined, TR + 1.73, undefined, undefined, tag));
-    const bx = x - Math.sin(yaw) * 1.0, bz = z - Math.cos(yaw) * 1.0;
-    colliders.push(boxCol(bx, bz, Math.abs(Math.sin(yaw)) > 0.5 ? 0.35 : 2.2, Math.abs(Math.sin(yaw)) > 0.5 ? 2.2 : 0.35, undefined, TR + 4.2, undefined, undefined, tag));
+    seats.push({ x, z, y: 1.73 + 1.86, yaw });
+    colliders.push(circleCol(x, z, 1.05, 6.2));
   };
   for (const tx of [-13, 13]) for (const tz of [-69, -85]) {
     I.at(tx, 0, tz, 0, () => {
@@ -483,27 +466,23 @@ export function buildHall(scene: THREE.Scene, colliders: Collider[], seats: Seat
       I.box(pal[2], 2.6, 0.06, 1.8, 3, 3.12, -0.9);
       I.box(pal[0], 1.5, 0.3, 1.1, 2.4, 3.25, 1.4, 0.5);
     });
-    colliders.push(boxCol(tx, tz, 10.4, 5.2, undefined, TR + 3.10), circleCol(tx, tz, 0.85, TR + 5.15));
-    for (const sx of [-2.8, 2.8]) { chair(tx + sx, tz + 4.35, Math.PI); chair(tx + sx, tz - 4.35, 0); }
+    colliders.push(boxCol(tx, tz, 10.4, 5.2, undefined, 5.6));
+    for (const sx of [-2.7, 2.7]) { chair(tx + sx, tz + 3.9, Math.PI); chair(tx + sx, tz - 3.9, 0); }
   }
 
-  // librarian desk, globe, card catalogue, plants — all solid & jumpable
+  // librarian desk, globe, card catalogue, plants
   I.box(darkWood, 14, 3.4, 3, 26, 1.7, -61);
   I.box(wood, 14.6, 0.3, 3.6, 26, 3.5, -61);
   I.box(brass, 0.2, 1.2, 0.2, 31, 4.2, -61);
   I.add(std(0x2f6f8f, 0.5), new THREE.IcosahedronGeometry(1.1, 2), 31, 5.6, -61);
   I.box(darkWood, 9, 7, 2.6, -26, 3.5, -58);
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) I.box(brass, 0.5, 0.16, 0.12, -29 + i * 2, 1.3 + j * 1.5, -56.66);
-  colliders.push(
-    boxCol(26, -61, 14.6, 3.6, undefined, TR + 3.65),
-    circleCol(31, -61, 1.15, TR + 6.7),
-    boxCol(-26, -58, 9.0, 2.8, undefined, TR + 7.0)
-  );
+  colliders.push(boxCol(26, -61, 14.6, 3.6, undefined, 7.5), boxCol(-26, -58, 9, 2.8, undefined, 9.2));
   const leaf = std(0x2f6b35, 0.85, { flatShading: true });
   for (const s of [-1, 1]) {
     I.add(std(0x9c5b3b, 0.8), lathe([[0.7, 0], [1.0, 1.3], [1.15, 1.9], [1.0, 2]], 10), s * 9, 0, -58.6);
     for (let i = 0; i < 4; i++) I.add(leaf, new THREE.IcosahedronGeometry(1, 1), s * 9 + Math.sin(i * 2) * 0.6, 3 + i * 0.9, -58.6 + Math.cos(i * 2) * 0.6, [i, i, 0], [1.1, 1.3, 1.1]);
-    colliders.push(circleCol(s * 9, -58.6, 1.3, TR + 6.2));
+    colliders.push(circleCol(s * 9, -58.6, 1.3, 8.2));
   }
 
   // long tube lights — visibly lit

@@ -22,17 +22,17 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   /* ---------- materials ---------- */
   const lawnM = mapped(tex(512, 512, (c, w, h) => {
     speckle(c, w, h, "#478035", ["#3c712c", "#548f3e", "#356627", "#619c48", "#4d8739"], 14000, 4, 3);
-  }), 0.97, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  }), 0.97);
   const paverM = mapped(tex(256, 256, (c, w, h) => {
     speckle(c, w, h, "#b9ab90", ["#a39478", "#cfc3aa", "#8f8168"], 2600, 6, 6);
     c.strokeStyle = "rgba(80,68,48,0.5)"; c.lineWidth = 2;
     for (let y = 0; y < h; y += 64) for (let x = (y / 64) % 2 ? -64 : 0; x < w; x += 128) c.strokeRect(x, y, 128, 64);
-  }), 0.95, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  }), 0.95);
   const hedgeM = mapped(tex(128, 128, (c, w, h) => speckle(c, w, h, "#2f6230", ["#224a24", "#40793c", "#18381a"], 2600, 5, 5)), 1);
   const stoneM = std(0xc9bfa6, 0.9);
   const iron = std(0x1f2428, 0.55, { metalness: 0.6 });
   const woodM = std(0x7a5230, 0.75);
-  const white = std(0xf7f5ed, 0.74, { polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const white = std(0xf7f5ed, 0.74);
   const lampGlass = new THREE.MeshStandardMaterial({ color: 0xfff1cf, emissive: 0xffd98a, emissiveIntensity: 0.9, roughness: 0.3 });
   const rubber = std(0x17181a, 0.9);
   const glass = std(0x1b2a33, 0.15, { metalness: 0.5 });
@@ -42,16 +42,16 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
   const flat = (m: THREE.Material, w: number, d: number, x: number, z: number, y: number, tile: number) =>
     G.add(m, tilePlane(w, d, tile), x, y, z, [-Math.PI / 2, 0, 0]);
   // One seamless rectangular lawn extending across front, back, left & right right up to all 4 perimeter double roads.
-  flat(lawnM, PW, PD, PCX, PCZ, 0.03, 16);
-  const F = 0.16;
+  flat(lawnM, PW, PD, PCX, PCZ, 0.02, 16);
+  const F = 0.13;
   flat(paverM, 80, 58, 0, -27.5, 0.04 + F, 9);
-  flat(paverM, 20, 70, 0, 35, 0.055 + F, 9);
-  flat(paverM, 244, 10, 0, 30, 0.03 + F, 9);
-  G.add(paverM, new THREE.CircleGeometry(18, 40), 0, 0.075 + F, 30, [-Math.PI / 2, 0, 0], [1, 1, 1]);
+  flat(paverM, 20, 70, 0, 35, 0.04 + F, 9);
+  flat(paverM, 244, 10, 0, 30, 0.035 + F, 9);
+  G.add(paverM, new THREE.CircleGeometry(18, 40), 0, 0.05 + F, 30, [-Math.PI / 2, 0, 0], [1, 1, 1]);
   // Front promenade spans the full width of the park and terminates cleanly at the z = 80 perimeter double road edge.
-  flat(paverM, PW, 12, PCX, 74, 0.065 + F, 9);
-  for (const z of [80.4, 111.6]) flat(white, PW, 0.42, PCX, z, 0.24, 1);
-  for (let x = -8; x <= 8; x += 3.2) flat(white, 1.7, 29, x, 96, 0.245, 1);
+  flat(paverM, PW, 12, PCX, 74, 0.045 + F, 9);
+  for (const z of [80.4, 111.6]) flat(white, PW, 0.42, PCX, z, 0.195, 1);
+  for (let x = -8; x <= 8; x += 3.2) flat(white, 1.7, 29, x, 96, 0.205, 1);
   G.build(scene, false, true);
 
   /* ---------- solid props ---------- */
@@ -90,14 +90,12 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
       P.add(iron, prism(0.01, 1.25, 1.1, 4), 0, 14.45, 0);
       P.add(iron, new THREE.IcosahedronGeometry(0.26, 0), 0, 15.1, 0);
     });
-    colliders.push(circleCol(x, z, 0.95, 15.15));
+    colliders.push(circleCol(x, z, 0.95));
   };
   for (const s of [-1, 1]) { for (const z of [4, 46, 66]) lamp(s * 11.5, z); lamp(s * 30, -6); lamp(s * 30, -34); lamp(s * 46, 23.5); lamp(s * 92, 23.5); lamp(s * 70, 71); lamp(s * 132, 71); }
 
-  // park benches (solid climbable seat & backrest + matched sitting seats)
-  let benchIdx = 0;
+  // park benches (seat height matched to the character)
   const bench = (x: number, z: number, yaw: number) => {
-    const tag = `bench_${benchIdx++}`;
     P.at(x, 0, z, yaw, () => {
       for (const sx of [-4.2, 0, 4.2]) { P.box(iron, 0.3, 1.6, 1.9, sx, 0.8, 0.05); P.box(iron, 0.3, 2.6, 0.3, sx, 2.9, -0.95); }
       for (const sx of [-4.35, 4.35]) P.box(iron, 0.34, 0.3, 2.1, sx, 2.6, 0.05);
@@ -105,28 +103,24 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
       for (const y of [2.45, 3.1, 3.75]) P.box(woodM, 9, 0.46, 0.18, 0, y, -0.98);
     });
     const side = Math.abs(Math.sin(yaw)) > 0.5;
-    colliders.push(boxCol(x, z, side ? 2.3 : 9.2, side ? 9.2 : 2.3, undefined, 1.75, undefined, undefined, tag));
-    const bx = x - Math.sin(yaw) * 0.96, bz = z - Math.cos(yaw) * 0.96;
-    colliders.push(boxCol(bx, bz, side ? 0.45 : 9.1, side ? 9.1 : 0.45, undefined, 4.0, undefined, undefined, tag));
-    for (const o of [-3, 0, 3]) {
-      seats.push({ x: x + Math.cos(yaw) * o, z: z - Math.sin(yaw) * o, y: 1.74, yaw, tag });
-    }
+    colliders.push(boxCol(x, z, side ? 2.6 : 9.4, side ? 9.4 : 2.6));
+    for (const o of [-3, 0, 3]) seats.push({ x: x + Math.cos(yaw) * o, z: z - Math.sin(yaw) * o, y: 1.73, yaw });
   };
   for (const s of [-1, 1]) for (const z of [14, 54]) bench(s * 13.4, z, (-s * Math.PI) / 2);
   for (const s of [-1, 1]) bench(s * 36, -20, (-s * Math.PI) / 2);
   bench(-60, 23.4, 0); bench(60, 23.4, 0);
 
-  // litter bins, bollards, park sign — all solid & jumpable on top
+  // litter bins, bollards, park sign
   for (const [x, z] of [[14.2, 21.5], [-14.2, 46], [36, -9], [-60, 37.2]]) {
     P.box(std(0x23503a, 0.7), 1.7, 2.4, 1.7, x, 1.2, z);
     P.box(iron, 1.9, 0.3, 1.9, x, 2.55, z);
-    colliders.push(boxCol(x, z, 1.9, 1.9, undefined, 2.72));
+    colliders.push(circleCol(x, z, 1.15));
   }
   const bollard = lathe([[0.55, 0], [0.5, 2.6], [0.72, 2.8], [0.5, 3.2], [0.01, 3.35]], 8);
-  for (const x of [-9.4, -3.1, 3.1, 9.4]) { P.add(iron, bollard, x, 0, 68.6); colliders.push(circleCol(x, 68.6, 0.72, 3.35)); }
+  for (const x of [-9.4, -3.1, 3.1, 9.4]) { P.add(iron, bollard, x, 0, 68.6); colliders.push(circleCol(x, 68.6, 0.7)); }
   P.box(stoneM, 17.6, 5.8, 1.6, -27, 2.9, 62);
   P.box(stoneM, 18.4, 0.45, 2.0, -27, 6.0, 62);
-  colliders.push(boxCol(-27, 62, 18.4, 2.2, undefined, 6.23));
+  colliders.push(boxCol(-27, 62, 18.4, 2.2, undefined, 6.2));
   const signM = new THREE.MeshStandardMaterial({
     map: tex(1024, 384, (c, w, h) => {
       c.fillStyle = "#143528";
@@ -154,20 +148,17 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
       fitText("Bagh-e-Jinnah, Karachi  ·  Est. 1865", "600", 34, 22, 304, "#f1dfa6");
     }, false),
     roughness: 0.52,
-    polygonOffset: true,
-    polygonOffsetFactor: -3,
-    polygonOffsetUnits: -3,
   });
   // Mount raised plaques well proud of both faces of the stone monument so text never clips or z-fights.
   for (const s of [-1, 1] as const) {
     P.box(iron, 15.6, 4.75, 0.22, -27, 2.95, 62 + s * 0.86);
-    P.add(signM, new THREE.PlaneGeometry(15.1, 4.4), -27, 2.95, 62 + s * 1.02, [0, s === 1 ? 0 : Math.PI, 0]);
+    P.add(signM, new THREE.PlaneGeometry(15.1, 4.4), -27, 2.95, 62 + s * 1.0, [0, s === 1 ? 0 : Math.PI, 0]);
   }
 
-  // fountain — solid outer basin ledge, middle tier bowl & top finial (all climbable!)
+  // fountain
   P.add(stoneM, lathe([[7.2, 0.3], [7.2, 1.5], [8.3, 1.7], [8.5, 1.2], [8.3, 0]], 28), 0, 0, 30);
   P.add(stoneM, lathe([[1.7, 0], [1.0, 1.6], [0.7, 4], [1.2, 4.6], [3.3, 5.2], [3.5, 5.6], [0.5, 5.4], [0.4, 7.4], [1.6, 7.9], [1.7, 8.2], [0.2, 8.1]], 20), 0, 0, 30);
-  colliders.push(circleCol(0, 30, 8.55, 1.72), circleCol(0, 30, 3.55, 5.62), circleCol(0, 30, 1.72, 8.22));
+  colliders.push(circleCol(0, 30, 8.7));
 
   // parked cars
   const car = (x: number, z: number, color: number) => {
@@ -191,8 +182,7 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
       }
       for (const sz of [-2.2, 2.2]) { P.box(white, 0.2, 0.5, 1.1, -7.75, 2.3, sz); P.box(std(0xb3261e, 0.5), 0.2, 0.5, 1.1, 7.95, 2.3, sz); }
     });
-    // Two-tier car colliders: hood/trunk deck + cabin roof so player can jump onto hood then climb onto car roof!
-    colliders.push(boxCol(x, z, 16.0, 6.4, undefined, 3.48), boxCol(x + 1.0, z, 8.6, 5.5, undefined, 5.64));
+    colliders.push(boxCol(x, z, 16.4, 6.8, undefined, 5.6));
   };
   car(-48, 84.8, 0xe9e6dd); car(60, 84.8, 0x8e1f25); car(30, 107.2, 0x1f3f6b);
 
@@ -293,8 +283,6 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     depthWrite: false,
     uniforms: { uTime: { value: 0 }, uDay: { value: 1 } },
     vertexShader: `
-      #include <common>
-      #include <logdepthbuf_pars_vertex>
       uniform float uTime;
       varying vec2 vUv; varying float vWave; varying vec3 vW;
       void main() {
@@ -308,15 +296,11 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
         vec4 wp = modelMatrix * vec4(p, 1.0);
         vW = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
-        #include <logdepthbuf_vertex>
       }`,
     fragmentShader: `
-      #include <common>
-      #include <logdepthbuf_pars_fragment>
       uniform float uTime; uniform float uDay;
       varying vec2 vUv; varying float vWave; varying vec3 vW;
       void main() {
-        #include <logdepthbuf_fragment>
         vec3 v = normalize(cameraPosition - vW);
         float fres = pow(1.0 - clamp(v.y, 0.0, 1.0), 2.4);
         vec3 deep = mix(vec3(0.015, 0.07, 0.13), vec3(0.03, 0.20, 0.28), uDay);
@@ -351,8 +335,6 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     side: THREE.DoubleSide,
     uniforms: { uTime: { value: 0 }, uDay: { value: 1 } },
     vertexShader: `
-      #include <common>
-      #include <logdepthbuf_pars_vertex>
       uniform float uTime; varying vec2 vUv;
       void main() {
         vUv = uv;
@@ -360,14 +342,10 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
         p.x += sin(p.y * 3.4 + uTime * 2.8) * 0.035;
         p.z += cos(p.y * 2.8 - uTime * 2.2) * 0.035;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-        #include <logdepthbuf_vertex>
       }`,
     fragmentShader: `
-      #include <common>
-      #include <logdepthbuf_pars_fragment>
       uniform float uTime; uniform float uDay; varying vec2 vUv;
       void main() {
-        #include <logdepthbuf_fragment>
         float edge = smoothstep(0.0, 0.22, vUv.x) * (1.0 - smoothstep(0.78, 1.0, vUv.x));
         float drops = pow(max(sin(vUv.y * 34.0 - uTime * 5.8 + vUv.x * 8.0), 0.0), 8.0);
         float alpha = edge * (0.24 + drops * 0.46) * (0.55 + 0.45 * uDay);
@@ -393,8 +371,6 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
     side: THREE.DoubleSide,
     uniforms: { uTime: { value: 0 }, uDay: { value: 1 } },
     vertexShader: `
-      #include <common>
-      #include <logdepthbuf_pars_vertex>
       uniform float uTime; varying vec2 vUv; varying vec3 vWorld;
       void main() {
         vUv = uv;
@@ -404,15 +380,11 @@ export function buildPark(scene: THREE.Scene, colliders: Collider[], seats: Seat
         vec4 wp = modelMatrix * vec4(p, 1.0);
         vWorld = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
-        #include <logdepthbuf_vertex>
       }`,
     fragmentShader: `
-      #include <common>
-      #include <logdepthbuf_pars_fragment>
       uniform float uTime; uniform float uDay;
       varying vec2 vUv; varying vec3 vWorld;
       void main() {
-        #include <logdepthbuf_fragment>
         float sideFade = smoothstep(0.0, 0.13, vUv.x) * (1.0 - smoothstep(0.87, 1.0, vUv.x));
         float endFade = smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.86, 1.0, vUv.y));
         float streak = pow(max(sin(vUv.x * 71.0 + sin(vUv.y * 18.0 - uTime * 3.0) * 0.7), 0.0), 8.0);

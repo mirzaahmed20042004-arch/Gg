@@ -3,52 +3,19 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 /* ---------- shared world types ---------- */
 export type Collider =
-  | {
-      kind: "box";
-      minX: number;
-      maxX: number;
-      minZ: number;
-      maxZ: number;
-      active?: () => boolean;
-      top?: number;
-      bottom?: number;
-      surfaceY?: (x: number, z: number) => number;
-      seatTag?: string;
-    }
-  | {
-      kind: "circle";
-      x: number;
-      z: number;
-      r: number;
-      active?: () => boolean;
-      top?: number;
-      bottom?: number;
-      surfaceY?: (x: number, z: number) => number;
-      seatTag?: string;
-    };
+  | { kind: "box"; minX: number; maxX: number; minZ: number; maxZ: number; active?: () => boolean; top?: number }
+  | { kind: "circle"; x: number; z: number; r: number; top?: number };
 
 export interface Seat {
   x: number;
   z: number;
-  /** world height of the seat surface */
+  /** height of the seat surface */
   y: number;
   /** direction the sitter faces */
   yaw: number;
-  /** optional tag matching the seat's collider so sitting/standing never collides with the seat itself */
-  tag?: string;
 }
 
-export const boxCol = (
-  x: number,
-  z: number,
-  w: number,
-  d: number,
-  active?: () => boolean,
-  top?: number,
-  bottom?: number,
-  surfaceY?: (x: number, z: number) => number,
-  seatTag?: string
-): Collider => ({
+export const boxCol = (x: number, z: number, w: number, d: number, active?: () => boolean, top?: number): Collider => ({
   kind: "box",
   minX: x - w / 2,
   maxX: x + w / 2,
@@ -56,19 +23,8 @@ export const boxCol = (
   maxZ: z + d / 2,
   active,
   top,
-  bottom,
-  surfaceY,
-  seatTag,
 });
-export const circleCol = (
-  x: number,
-  z: number,
-  r: number,
-  top?: number,
-  bottom?: number,
-  surfaceY?: (x: number, z: number) => number,
-  seatTag?: string
-): Collider => ({ kind: "circle", x, z, r, top, bottom, surfaceY, seatTag });
+export const circleCol = (x: number, z: number, r: number, top?: number): Collider => ({ kind: "circle", x, z, r, top });
 
 /** Deterministic random generator. */
 export function rng(seed: number) {
@@ -93,10 +49,7 @@ export function tex(
   draw(c.getContext("2d")!, w, h);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.generateMipmaps = true;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
-  t.magFilter = THREE.LinearFilter;
-  t.anisotropy = 16;
+  t.anisotropy = 8;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
