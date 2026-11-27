@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+const b=await chromium.launch({args:['--use-gl=angle','--enable-unsafe-swiftshader']});
+const p=await b.newPage({viewport:{width:1100,height:700}});const errs=[];
+p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
+await p.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded',timeout:90000});
+await p.locator('.spin-slow').waitFor({state:'detached',timeout:120000});
+await p.waitForTimeout(1200);
+await p.evaluate(()=>document.querySelector('button[aria-label="Jet On"]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})));
+await p.keyboard.down('PageUp');
+const stick=p.locator('[aria-label="Movement joystick"]');const r=await stick.boundingBox();
+await p.mouse.move(r.x+r.width/2,r.y+r.height/2);await p.mouse.down();await p.mouse.move(r.x+r.width*.94,r.y+r.height/2,{steps:8});
+await p.waitForTimeout(6500);await p.keyboard.up('PageUp');await p.mouse.up();
+await p.screenshot({path:'/tmp/world-road-view.png',timeout:150000});
+console.log('errors:',errs.length?errs:'none');await b.close();

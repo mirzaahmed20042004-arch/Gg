@@ -1,0 +1,17 @@
+import { chromium } from 'playwright';
+const browser=await chromium.launch({args:['--use-gl=angle','--enable-unsafe-swiftshader']});
+const page=await browser.newPage({viewport:{width:1180,height:760}});
+const errors=[];page.on('pageerror',e=>errors.push('page: '+e.message));page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text())});
+await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded',timeout:90000});
+await page.locator('.spin-slow').waitFor({state:'detached',timeout:120000});
+await page.waitForTimeout(2500);
+await page.screenshot({path:'/tmp/verify-road.png',timeout:150000});
+await page.evaluate(()=>document.querySelector('button[aria-label="Switch to night"]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})));
+await page.waitForTimeout(4500);
+await page.screenshot({path:'/tmp/verify-night.png',timeout:150000});
+await page.evaluate(()=>document.querySelector('button[aria-label="Switch to day"]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})));
+await page.evaluate(()=>document.querySelector('button[aria-label="Jet On"]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})));
+await page.waitForTimeout(500);
+const jet={off:await page.locator('button[aria-label="Jet Off"]').count(),stick:await page.locator('[aria-label="Movement joystick"]').count(),alt:await page.locator('[aria-label="Jet altitude control"]').count(),clap:await page.locator('button[aria-label="Clap"]').count(),global:await page.locator('button[aria-label="Switch to night"]').count()};
+console.log(JSON.stringify({jet,errors}));
+await browser.close();
